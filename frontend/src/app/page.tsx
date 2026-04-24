@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import jsPDF from "jspdf";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -157,11 +158,13 @@ function assignNumbers(
 }
 
 export default function Home() {
+  const { isSignedIn, isLoaded } = useUser();
   const [clues, setClues] = useState<ClueEntry[]>([
     { answer: "", clue: "" },
   ]);
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [puzzleByline, setPuzzleByline] = useState("by Jonathan Shambroom");
+  const [currentPuzzleId, setCurrentPuzzleId] = useState<string | null>(null);
   const [puzzleDate] = useState(formatDate(new Date()));
   const [result, setResult] = useState<CrosswordResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -184,10 +187,21 @@ export default function Home() {
   const [manualDirection, setManualDirection] = useState<"across" | "down">("across");
   const manualGridRef = useRef<HTMLDivElement>(null);
 
+  // Load saved puzzles from API (if signed in) or localStorage (if not)
   useEffect(() => {
-    const raw = localStorage.getItem("crossword_puzzles");
-    if (raw) setSavedPuzzles(JSON.parse(raw));
-  }, []);
+    if (!isLoaded) return;
+    if (isSignedIn) {
+      fetch("/api/puzzles")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) setSavedPuzzles(data);
+        })
+        .catch(() => {});
+    } else {
+      const raw = localStorage.getItem("crossword_puzzles");
+      if (raw) setSavedPuzzles(JSON.parse(raw));
+    }
+  }, [isLoaded, isSignedIn]);
 
   function updateClue(index: number, field: keyof ClueEntry, value: string) {
     const updated = [...clues];
@@ -488,25 +502,9 @@ export default function Home() {
     }
   }
 
-  function savePuzzle() {
+  async function savePuzzle() {
     if (!result) return;
-    const puzzle: SavedPuzzle = {
-      id: Date.now().toString(),
-      title: puzzleTitle || "Untitled Puzzle",
-      byline: puzzleByline,
-      date: puzzleDate,
-      clues,
-      result,
-      savedAt: new Date().toISOString(),
-      manualGrid: manualGrid.length > 0 ? manualGrid : undefined,
-      manualGridSize: manualGrid.length > 0 ? manualGridSize : undefined,
-    };
-    const updated = [
-      ...savedPuzzles.filter((p) => p.title !== puzzle.title),
-      puzzle,
-    ];
-    setSavedPuzzles(updated);
-    localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
+
     const now = new Date();
     const ts =
       now.toLocaleDateString("en-US", {
@@ -520,27 +518,110 @@ export default function Home() {
         minute: "2-digit",
         hour12: true,
       });
+
+    if (isSignedIn) {
+      // Save to database
+      try {
+        const res = await fetch("/api/puzzles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: currentPuzzleId || undefined,
+            title: puzzleTitle || "Untitled Puzzle",
+            byline: puzzleByline,
+            date: puzzleDate,
+            clues,
+            result,
+            manualGrid: manualGrid.length > 0 ? manualGrid : null,
+            manualGridSize: manualGrid.length > 0 ? manualGridSize : null,
+          }),
+        });
+        const saved = await res.json();
+        if (saved.id) setCurrentPuzzleId(saved.id);
+        // Refresh list
+        const listRes = await fetch("/api/puzzles");
+        const list = await listRes.json();
+        if (Array.isArray(list)) setSavedPuzzles(list);
+      } catch {}
+    } else {
+      // Fall back to localStorage
+      const puzzle: SavedPuzzle = {
+        id: Date.now().toString(),
+        title: puzzleTitle || "Untitled Puzzle",
+        byline: puzzleByline,
+        date: puzzleDate,
+        clues,
+        result,
+        savedAt: new Date().toISOString(),
+        manualGrid: manualGrid.length > 0 ? manualGrid : undefined,
+        manualGridSize: manualGrid.length > 0 ? manualGridSize : undefined,
+      };
+      const updated = [
+        ...savedPuzzles.filter((p) => p.title !== puzzle.title),
+        puzzle,
+      ];
+      setSavedPuzzles(updated);
+      localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
+    }
+
     setSaveTimestamp(ts);
   }
 
-  function loadPuzzle(puzzle: SavedPuzzle) {
-    setPuzzleTitle(puzzle.title);
-    setPuzzleByline(puzzle.byline || "by Jonathan Shambroom");
-    setClues(puzzle.clues);
-    setResult(puzzle.result);
-    if (puzzle.manualGrid && puzzle.manualGridSize) {
-      setManualGrid(puzzle.manualGrid);
-      setManualGridSize(puzzle.manualGridSize);
-    } else if (puzzle.result) {
-      buildManualGrid(puzzle.result);
+  async function loadPuzzle(puzzle: SavedPuzzle) {
+    if (isSignedIn && puzzle.id) {
+      // Fetch full puzzle from API
+      try {
+        const res = await fetch(`/api/puzzles/${puzzle.id}`);
+        const full = await res.json();
+        if (full.error) throw new Error(full.error);
+        setPuzzleTitle(full.title);
+        setPuzzleByline(full.byline || "by Jonathan Shambroom");
+        setClues(full.clues || []);
+        setResult(full.result || null);
+        setCurrentPuzzleId(full.id);
+        if (full.manual_grid && full.manual_grid_size) {
+          setManualGrid(full.manual_grid);
+          setManualGridSize(full.manual_grid_size);
+        } else if (full.result) {
+          buildManualGrid(full.result);
+        }
+      } catch {
+        setError("Failed to load puzzle");
+      }
+    } else {
+      // Load from localStorage object
+      setPuzzleTitle(puzzle.title);
+      setPuzzleByline(puzzle.byline || "by Jonathan Shambroom");
+      setClues(puzzle.clues);
+      setResult(puzzle.result);
+      setCurrentPuzzleId(null);
+      if (puzzle.manualGrid && puzzle.manualGridSize) {
+        setManualGrid(puzzle.manualGrid);
+        setManualGridSize(puzzle.manualGridSize);
+      } else if (puzzle.result) {
+        buildManualGrid(puzzle.result);
+      }
     }
     setShowSaved(false);
   }
 
-  function deletePuzzle(id: string) {
-    const updated = savedPuzzles.filter((p) => p.id !== id);
-    setSavedPuzzles(updated);
-    localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
+  async function deletePuzzle(id: string) {
+    if (isSignedIn) {
+      try {
+        await fetch("/api/puzzles", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+        const listRes = await fetch("/api/puzzles");
+        const list = await listRes.json();
+        if (Array.isArray(list)) setSavedPuzzles(list);
+      } catch {}
+    } else {
+      const updated = savedPuzzles.filter((p) => p.id !== id);
+      setSavedPuzzles(updated);
+      localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
+    }
   }
 
   async function buildPDF(showAnswers = false): Promise<jsPDF> {
@@ -998,16 +1079,40 @@ export default function Home() {
 
       {/* App Header */}
       <header className="mb-8 border-b-2 border-black pb-4">
-        <h1
-          className="text-3xl sm:text-5xl font-bold tracking-tight"
-          style={{ fontFamily: FONT_HEADING }}
-        >
-          Crossword Builder
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1
+            className="text-3xl sm:text-5xl font-bold tracking-tight"
+            style={{ fontFamily: FONT_HEADING }}
+          >
+            Crossword Builder
+          </h1>
+          <div style={{ fontFamily: FONT_BODY }}>
+            {isLoaded && (
+              isSignedIn ? (
+                <UserButton />
+              ) : (
+                <SignInButton mode="modal">
+                  <button className="px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition font-medium">
+                    Sign In
+                  </button>
+                </SignInButton>
+              )
+            )}
+          </div>
+        </div>
         <p className="text-gray-500 mt-1 text-sm" style={{ fontFamily: FONT_BODY }}>
-          Enter your answers and clues — the app decides across vs. down for
-          optimal layout
+          Enter your answers and clues — the app will create the grid layout and numbering.
         </p>
+        <details className="mt-2 text-sm text-gray-400">
+          <summary className="cursor-pointer hover:text-gray-600" style={{ fontFamily: FONT_BODY }}>
+            Tips for building your crossword
+          </summary>
+          <ul className="mt-1.5 space-y-1 pl-4 list-disc text-gray-500" style={{ fontFamily: FONT_BODY }}>
+            <li>Create an initial layout, then switch to <strong>"Manual"</strong> mode to add your own answers directly into the grid while preserving the current layout.</li>
+            <li>After you add manually to the grid, click <strong>"Capture New Words from Grid"</strong> and the app will update the numbering after your manual additions.</li>
+            <li>If you edit the clues, click <strong>"Sync Clues (keep layout)"</strong> for the edits to be adopted.</li>
+          </ul>
+        </details>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1033,6 +1138,7 @@ export default function Home() {
                         setPuzzleByline("by Jonathan Shambroom");
                         setClues([{ answer: "", clue: "" }]);
                         setResult(null);
+                        setCurrentPuzzleId(null);
                         setManualGrid([]);
                         setManualGridSize({ rows: 0, cols: 0 });
                         setSelectedCell(null);
