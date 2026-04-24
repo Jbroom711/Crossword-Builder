@@ -163,7 +163,7 @@ export default function Home() {
     { answer: "", clue: "" },
   ]);
   const [puzzleTitle, setPuzzleTitle] = useState("");
-  const [puzzleByline, setPuzzleByline] = useState("by Jonathan Shambroom");
+  const [puzzleByline, setPuzzleByline] = useState("");
   const [currentPuzzleId, setCurrentPuzzleId] = useState<string | null>(null);
   const [puzzleDate] = useState(formatDate(new Date()));
   const [result, setResult] = useState<CrosswordResult | null>(null);
@@ -599,7 +599,7 @@ export default function Home() {
         const full = await res.json();
         if (full.error) throw new Error(full.error);
         setPuzzleTitle(full.title);
-        setPuzzleByline(full.byline || "by Jonathan Shambroom");
+        setPuzzleByline(full.byline || "");
         setClues(full.clues || []);
         setResult(full.result || null);
         setCurrentPuzzleId(full.id);
@@ -615,7 +615,7 @@ export default function Home() {
     } else {
       // Load from localStorage object
       setPuzzleTitle(puzzle.title);
-      setPuzzleByline(puzzle.byline || "by Jonathan Shambroom");
+      setPuzzleByline(puzzle.byline || "");
       setClues(puzzle.clues);
       setResult(puzzle.result);
       setCurrentPuzzleId(null);
@@ -1125,7 +1125,8 @@ export default function Home() {
           </div>
         </div>
         <p className="text-gray-500 mt-1 text-sm" style={{ fontFamily: FONT_BODY }}>
-          Enter your answers and clues — the app will create the grid layout and numbering.
+          Enter your answers &amp; clues.<br />
+          App will create the grid layout and numbering.
         </p>
         <details className="mt-2 text-sm text-gray-400">
           <summary className="cursor-pointer hover:text-gray-600" style={{ fontFamily: FONT_BODY }}>
@@ -1133,10 +1134,19 @@ export default function Home() {
           </summary>
           <ul className="mt-1.5 space-y-1 pl-4 list-disc text-gray-500" style={{ fontFamily: FONT_BODY }}>
             <li>Create an initial layout, then switch to <strong>"Manual"</strong> mode to add your own answers directly into the grid while preserving the current layout.</li>
-            <li>After you add manually to the grid, click <strong>"Capture New Words from Grid"</strong> and the app will update the numbering after your manual additions.</li>
-            <li>If you edit the clues, click <strong>"Sync Clues (keep layout)"</strong> for the edits to be adopted.</li>
+            <li>This allows you to maximize overlaps and add small words without losing base layout.</li>
+            <li>After manual additions to the grid, click <strong>"Capture New Words from Grid"</strong> to update numbering, capture those answers, and allow you to enter the corresponding clues.</li>
+            <li>If you edit any clues, click <strong>"Sync Clues (keep layout)"</strong> for the edits to be adopted.</li>
           </ul>
         </details>
+        <p className="mt-2 text-xs text-gray-400" style={{ fontFamily: FONT_BODY }}>
+          <a
+            href="mailto:jshambroom@gmail.com?subject=Feedback%20on%20Crossword%20Builder%20App"
+            className="hover:text-gray-600 underline transition"
+          >
+            Send feedback
+          </a>
+        </p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1159,7 +1169,7 @@ export default function Home() {
                       onConfirm: () => {
                         setConfirmModal(null);
                         setPuzzleTitle("");
-                        setPuzzleByline("by Jonathan Shambroom");
+                        setPuzzleByline("");
                         setClues([{ answer: "", clue: "" }]);
                         setResult(null);
                         setCurrentPuzzleId(null);
@@ -1193,7 +1203,7 @@ export default function Home() {
             />
             <input
               type="text"
-              placeholder="e.g. by Jonathan Shambroom"
+              placeholder={`e.g. by Jonathan Shambroom // ${puzzleDate}`}
               value={puzzleByline}
               onChange={(e) => setPuzzleByline(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border-b border-gray-200 bg-transparent focus:outline-none focus:border-gray-400 transition mt-1"
