@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+:root {
+  --cell-size: 38px;
+  --border-color: #000;
+  --bg-filled: #fff;
+  --bg-black: #000;
+  --number-color: #333;
+  --letter-color: #000;
+  --font-heading: "Playfair Display", Georgia, serif;
+  --font-body: "Libre Franklin", system-ui, sans-serif;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --cell-size: 28px;
+  }
+}
+
+body {
+  font-family: var(--font-body);
+  background: #f7f7f5;
+  color: #121212;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* NYT-style crossword grid */
+.crossword-grid {
+  display: inline-grid;
+  border: 2px solid var(--border-color);
+  background: var(--bg-black);
+  gap: 1px;
+}
+
+.crossword-cell {
+  width: var(--cell-size);
+  height: var(--cell-size);
+  position: relative;
+  background: var(--bg-filled);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crossword-cell.black {
+  background: var(--bg-black);
+}
+
+.crossword-cell .cell-number {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--number-color);
+  line-height: 1;
+}
+
+@media (max-width: 640px) {
+  .crossword-cell .cell-number {
+    font-size: 7px;
+  }
+}
+
+.crossword-cell .cell-letter {
+  font-family: var(--font-body);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--letter-color);
+  text-transform: uppercase;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .crossword-cell .cell-letter {
+    font-size: 14px;
+  }
+}
+
+/* Grid scrollable on mobile */
+.grid-scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
