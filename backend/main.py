@@ -13,6 +13,7 @@ app = FastAPI(title="Crossword Builder API")
 allowed_origins = [
     "http://localhost:3030",
     "http://localhost:3000",
+    "https://crossword-builder-jsham.vercel.app",
 ]
 extra_origins = os.environ.get("CORS_ORIGINS", "")
 if extra_origins:
