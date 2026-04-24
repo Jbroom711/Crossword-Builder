@@ -188,15 +188,39 @@ export default function Home() {
   const manualGridRef = useRef<HTMLDivElement>(null);
 
   // Load saved puzzles from API (if signed in) or localStorage (if not)
+  // If signed in and localStorage has puzzles, migrate them to the cloud
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) {
-      fetch("/api/puzzles")
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setSavedPuzzles(data);
-        })
-        .catch(() => {});
+      (async () => {
+        // Check for localStorage puzzles to migrate
+        const raw = localStorage.getItem("crossword_puzzles");
+        if (raw) {
+          try {
+            const localPuzzles = JSON.parse(raw) as SavedPuzzle[];
+            for (const p of localPuzzles) {
+              await fetch("/api/puzzles", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  title: p.title,
+                  byline: p.byline || "",
+                  date: p.date,
+                  clues: p.clues,
+                  result: p.result,
+                  manualGrid: p.manualGrid || null,
+                  manualGridSize: p.manualGridSize || null,
+                }),
+              });
+            }
+            localStorage.removeItem("crossword_puzzles");
+          } catch {}
+        }
+        // Load from API
+        const res = await fetch("/api/puzzles");
+        const data = await res.json();
+        if (Array.isArray(data)) setSavedPuzzles(data);
+      })();
     } else {
       const raw = localStorage.getItem("crossword_puzzles");
       if (raw) setSavedPuzzles(JSON.parse(raw));
