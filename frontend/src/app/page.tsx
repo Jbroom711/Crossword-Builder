@@ -744,7 +744,7 @@ export default function Home() {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(5);
     pdf.setTextColor(150);
-    pdf.text("A Shambroom Crossword Build", gridX + gridW, gridBottomY + 6, { align: "right" });
+    pdf.text("A JSham Crossword Build", gridX + gridW, gridBottomY + 6, { align: "right" });
     pdf.setTextColor(0);
     const rightColX = gridX + gridW + gap;
     const rightColW = pw - margin - rightColX; // stretch to right page edge
@@ -965,7 +965,7 @@ export default function Home() {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(5);
     pdf.setTextColor(150);
-    pdf.text("A Shambroom Crossword Build", gridX + gridW, largeGridBottom + 6, { align: "right" });
+    pdf.text("A JSham Crossword Build", gridX + gridW, largeGridBottom + 6, { align: "right" });
     pdf.setTextColor(0);
 
     // === PAGE 2: Header + Two-column clues ===
