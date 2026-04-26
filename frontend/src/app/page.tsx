@@ -1606,6 +1606,51 @@ export default function Home() {
         <div>
           {result ? (
             <div>
+              {/* Hidden Message controls — shown at top of grid when active */}
+              {hiddenMessageMode && (
+                <div className="mb-4 p-4 border-2 border-purple-300 rounded-lg bg-purple-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-purple-800" style={{ fontFamily: FONT_HEADING }}>
+                      Hidden Message Mode
+                    </h3>
+                    <button
+                      onClick={() => setHiddenMessageMode(false)}
+                      className="px-3 py-1 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
+                      style={{ fontFamily: FONT_BODY }}
+                    >
+                      Done — Exit
+                    </button>
+                  </div>
+                  <p className="text-xs text-purple-600 mb-2" style={{ fontFamily: FONT_BODY }}>
+                    Click cells to select letters for the hidden message. Click again to deselect.
+                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-purple-600 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
+                    <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
+                      {hiddenMessageCells.length > 0
+                        ? hiddenMessageCells.map((cell) => result?.grid?.[cell.r]?.[cell.c] || "?").join("")
+                        : "—"}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Intended message (optional, for reference)"
+                    value={hiddenMessageText}
+                    onChange={(e) => setHiddenMessageText(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                    style={{ fontFamily: FONT_BODY }}
+                  />
+                  {hiddenMessageCells.length > 0 && (
+                    <button
+                      onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); }}
+                      className="mt-1 text-xs text-red-500 hover:text-red-700 transition"
+                    >
+                      Clear all selections
+                    </button>
+                  )}
+                </div>
+              )}
+
               {mode === "manual" ? (
                 /* ===== MANUAL MODE GRID ===== */
                 <div>
@@ -1792,6 +1837,9 @@ export default function Home() {
                                 <span className="cell-number">
                                   {result.numberGrid[r][c]}
                                 </span>
+                              )}
+                              {cell !== null && hiddenMessageMode && (
+                                <span className="cell-letter">{cell}</span>
                               )}
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
