@@ -1892,7 +1892,7 @@ export default function Home() {
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
                                   {result.numberGrid[r][c] > 0 ? (
-                                    <path d="M 50,2 A 48,48 0 1,0 15,9" fill="none" stroke="#000" strokeWidth="3" />
+                                    <path d="M 50,2 A 48,48 0 1,1 6,32" fill="none" stroke="#000" strokeWidth="3" />
                                   ) : (
                                     <circle cx="50" cy="50" r="48" fill="none" stroke="#000" strokeWidth="3" />
                                   )}
