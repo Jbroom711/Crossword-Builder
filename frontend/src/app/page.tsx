@@ -782,7 +782,25 @@ export default function Home() {
           if (cell !== null && isHiddenMessageCell(r, c)) {
             pdf.setDrawColor(124, 58, 237);
             pdf.setLineWidth(0.5);
-            pdf.circle(cx + cellSize / 2, cy + cellSize / 2, cellSize * 0.48);
+            const midX = cx + cellSize / 2;
+            const midY = cy + cellSize / 2;
+            const rad = cellSize * 0.48;
+            if (num > 0) {
+              // 3/4 circle: skip top-left quadrant (270° arc from left-center to top-center)
+              const k = 0.5522847498; // bezier approx for quarter circle
+              const kr = k * rad;
+              // Arc from left to bottom to right to top (skipping top-left)
+              pdf.lines(
+                [
+                  [0, kr, -kr, rad, 0, rad],           // left-center → bottom-center
+                  [kr, 0, rad, -kr, rad, 0],            // bottom-center → right-center
+                  [0, -kr, kr, -rad, 0, -rad],          // right-center → top-center
+                ],
+                midX - rad, midY, [1, 1], null, false
+              );
+            } else {
+              pdf.circle(midX, midY, rad);
+            }
             pdf.setDrawColor(0);
           }
         }
@@ -1019,7 +1037,23 @@ export default function Home() {
           if (cell !== null && isHiddenMessageCell(r, c)) {
             pdf.setDrawColor(124, 58, 237);
             pdf.setLineWidth(0.5);
-            pdf.circle(cx + largeCellSize / 2, cy + largeCellSize / 2, largeCellSize * 0.48);
+            const midX = cx + largeCellSize / 2;
+            const midY = cy + largeCellSize / 2;
+            const rad = largeCellSize * 0.48;
+            if (num > 0) {
+              const k = 0.5522847498;
+              const kr = k * rad;
+              pdf.lines(
+                [
+                  [0, kr, -kr, rad, 0, rad],
+                  [kr, 0, rad, -kr, rad, 0],
+                  [0, -kr, kr, -rad, 0, -rad],
+                ],
+                midX - rad, midY, [1, 1], null, false
+              );
+            } else {
+              pdf.circle(midX, midY, rad);
+            }
             pdf.setDrawColor(0);
           }
         }
@@ -1739,7 +1773,7 @@ export default function Home() {
                               )}
                               {hasLetter && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="2" />
+                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="3" />
                                 </svg>
                               )}
                             </div>
@@ -1851,7 +1885,11 @@ export default function Home() {
                               )}
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="2" />
+                                  {result.numberGrid[r][c] > 0 ? (
+                                    <path d="M 2,50 A 48,48 0 1,1 50,2" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                  ) : (
+                                    <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                  )}
                                 </svg>
                               )}
                             </div>
