@@ -234,9 +234,13 @@ export default function Home() {
           } catch {}
         }
         // Load from API
-        const res = await fetch("/api/puzzles");
-        const data = await res.json();
-        if (Array.isArray(data)) setSavedPuzzles(data);
+        try {
+          const res = await fetch("/api/puzzles");
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) setSavedPuzzles(data);
+          }
+        } catch {}
       })();
     } else {
       const raw = localStorage.getItem("crossword_puzzles");
@@ -582,9 +586,13 @@ export default function Home() {
         const saved = await res.json();
         if (saved.id) setCurrentPuzzleId(saved.id);
         // Refresh list
-        const listRes = await fetch("/api/puzzles");
-        const list = await listRes.json();
-        if (Array.isArray(list)) setSavedPuzzles(list);
+        try {
+          const listRes = await fetch("/api/puzzles");
+          if (listRes.ok) {
+            const list = await listRes.json();
+            if (Array.isArray(list)) setSavedPuzzles(list);
+          }
+        } catch {}
       } catch {}
     } else {
       // Fall back to localStorage
@@ -658,9 +666,13 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id }),
         });
-        const listRes = await fetch("/api/puzzles");
-        const list = await listRes.json();
-        if (Array.isArray(list)) setSavedPuzzles(list);
+        try {
+          const listRes = await fetch("/api/puzzles");
+          if (listRes.ok) {
+            const list = await listRes.json();
+            if (Array.isArray(list)) setSavedPuzzles(list);
+          }
+        } catch {}
       } catch {}
     } else {
       const updated = savedPuzzles.filter((p) => p.id !== id);

@@ -2,11 +2,20 @@ import { auth } from "@clerk/nextjs/server";
 import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
+async function getUserId(): Promise<string | null> {
+  try {
+    const { userId } = await auth();
+    return userId || null;
+  } catch {
+    return null;
+  }
+}
+
 // GET /api/puzzles — list all puzzles for the current user
 export async function GET() {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json([], { status: 200 });
   }
 
   const { data, error } = await supabase
@@ -24,7 +33,7 @@ export async function GET() {
 
 // POST /api/puzzles — create or update a puzzle
 export async function POST(req: NextRequest) {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -85,7 +94,7 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/puzzles — delete a puzzle
 export async function DELETE(req: NextRequest) {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

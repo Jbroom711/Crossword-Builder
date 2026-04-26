@@ -2,12 +2,21 @@ import { auth } from "@clerk/nextjs/server";
 import { supabase } from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 
+async function getUserId(): Promise<string | null> {
+  try {
+    const { userId } = await auth();
+    return userId || null;
+  } catch {
+    return null;
+  }
+}
+
 // GET /api/puzzles/[id] — fetch a single puzzle
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
