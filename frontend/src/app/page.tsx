@@ -780,7 +780,7 @@ export default function Home() {
           }
           // Hidden message circle
           if (cell !== null && isHiddenMessageCell(r, c)) {
-            pdf.setDrawColor(124, 58, 237);
+            pdf.setDrawColor(0, 0, 0);
             pdf.setLineWidth(0.5);
             const midX = cx + cellSize / 2;
             const midY = cy + cellSize / 2;
@@ -1035,7 +1035,7 @@ export default function Home() {
           }
           // Hidden message circle
           if (cell !== null && isHiddenMessageCell(r, c)) {
-            pdf.setDrawColor(124, 58, 237);
+            pdf.setDrawColor(0, 0, 0);
             pdf.setLineWidth(0.5);
             const midX = cx + largeCellSize / 2;
             const midY = cy + largeCellSize / 2;
@@ -1773,7 +1773,7 @@ export default function Home() {
                               )}
                               {hasLetter && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#000" strokeWidth="3" />
                                 </svg>
                               )}
                             </div>
@@ -1886,9 +1886,9 @@ export default function Home() {
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
                                   {result.numberGrid[r][c] > 0 ? (
-                                    <path d="M 2,50 A 48,48 0 1,1 50,2" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                    <path d="M 2,50 A 48,48 0 1,0 50,2" fill="none" stroke="#000" strokeWidth="3" />
                                   ) : (
-                                    <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                    <circle cx="50" cy="50" r="48" fill="none" stroke="#000" strokeWidth="3" />
                                   )}
                                 </svg>
                               )}
