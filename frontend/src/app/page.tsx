@@ -1511,7 +1511,7 @@ export default function Home() {
                       <span className="text-xs text-gray-500 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
                       <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
                         {hiddenMessageCells.length > 0
-                          ? hiddenMessageCells.map((cell) => result?.grid[cell.r]?.[cell.c] || "?").join("")
+                          ? [...hiddenMessageCells].sort((a, b) => a.c - b.c || a.r - b.r).map((cell) => result?.grid?.[cell.r]?.[cell.c] || "?").join("")
                           : "—"}
                       </span>
                     </div>
@@ -1622,13 +1622,13 @@ export default function Home() {
                     </button>
                   </div>
                   <p className="text-xs text-purple-600 mb-2" style={{ fontFamily: FONT_BODY }}>
-                    Click cells to select letters for the hidden message. Click again to deselect.
+                    Click cells to select letters for the hidden message when read left to right, regardless of height. Click again to deselect.
                   </p>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-purple-600 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
                     <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
                       {hiddenMessageCells.length > 0
-                        ? hiddenMessageCells.map((cell) => result?.grid?.[cell.r]?.[cell.c] || "?").join("")
+                        ? [...hiddenMessageCells].sort((a, b) => a.c - b.c || a.r - b.r).map((cell) => result?.grid?.[cell.r]?.[cell.c] || "?").join("")
                         : "—"}
                     </span>
                   </div>
