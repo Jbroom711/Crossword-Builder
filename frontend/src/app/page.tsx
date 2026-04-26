@@ -731,7 +731,16 @@ export default function Home() {
     pdf.setTextColor(80);
     pdf.text(`${puzzleByline}  //  ${puzzleDate}`, margin, y);
     pdf.setTextColor(0);
-    y += 10; // small gap before grid
+    y += 10;
+    // Hidden message note above grid
+    if (hiddenMessageCells.length > 0) {
+      pdf.setFont(bylineFont, "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(80);
+      pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
+      pdf.setTextColor(0);
+      y += 10;
+    }
 
     // Layout: grid flush left, Down clues column to the right, Across clues below grid
     const cols = result.size.cols;
@@ -773,7 +782,7 @@ export default function Home() {
           if (cell !== null && isHiddenMessageCell(r, c)) {
             pdf.setDrawColor(124, 58, 237);
             pdf.setLineWidth(0.5);
-            pdf.circle(cx + cellSize / 2, cy + cellSize / 2, cellSize * 0.42);
+            pdf.circle(cx + cellSize / 2, cy + cellSize / 2, cellSize * 0.48);
             pdf.setDrawColor(0);
           }
         }
@@ -788,11 +797,6 @@ export default function Home() {
     pdf.setFontSize(5);
     pdf.setTextColor(150);
     pdf.text("A JSham Crossword Build", gridX + gridW, gridBottomY + 6, { align: "right" });
-    if (hiddenMessageCells.length > 0) {
-      pdf.setTextColor(100);
-      pdf.setFontSize(6);
-      pdf.text("The letters in the circles spell a hidden message.", gridX, gridBottomY + 6);
-    }
     pdf.setTextColor(0);
     const rightColX = gridX + gridW + gap;
     const rightColW = pw - margin - rightColX; // stretch to right page edge
@@ -977,6 +981,15 @@ export default function Home() {
     // === PAGE 1: Header + Large Grid ===
     let y = drawHeader(margin);
 
+    if (hiddenMessageCells.length > 0) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(80);
+      pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
+      pdf.setTextColor(0);
+      y += 10;
+    }
+
     const cols = result.size.cols;
     const rows = result.size.rows;
     // Fill the page — constrained by whichever dimension hits the margin first
@@ -1006,7 +1019,7 @@ export default function Home() {
           if (cell !== null && isHiddenMessageCell(r, c)) {
             pdf.setDrawColor(124, 58, 237);
             pdf.setLineWidth(0.5);
-            pdf.circle(cx + largeCellSize / 2, cy + largeCellSize / 2, largeCellSize * 0.42);
+            pdf.circle(cx + largeCellSize / 2, cy + largeCellSize / 2, largeCellSize * 0.48);
             pdf.setDrawColor(0);
           }
         }
@@ -1021,11 +1034,6 @@ export default function Home() {
     pdf.setFontSize(5);
     pdf.setTextColor(150);
     pdf.text("A JSham Crossword Build", gridX + gridW, largeGridBottom + 6, { align: "right" });
-    if (hiddenMessageCells.length > 0) {
-      pdf.setTextColor(100);
-      pdf.setFontSize(6);
-      pdf.text("The letters in the circles spell a hidden message.", gridX, largeGridBottom + 6);
-    }
     pdf.setTextColor(0);
 
     // === PAGE 2: Header + Two-column clues ===
@@ -1500,7 +1508,7 @@ export default function Home() {
                   }`}
                   style={{ fontFamily: FONT_BODY }}
                 >
-                  {hiddenMessageMode ? "Done — Exit Hidden Message" : "Add Hidden Message"}
+                  {hiddenMessageMode ? "Done — Save & Exit" : "Add Hidden Message with Circled Letters"}
                 </button>
                 {hiddenMessageMode && (
                   <div className="mt-2 space-y-2">
@@ -1614,11 +1622,11 @@ export default function Home() {
                       Hidden Message Mode
                     </h3>
                     <button
-                      onClick={() => setHiddenMessageMode(false)}
+                      onClick={() => { setHiddenMessageMode(false); savePuzzle(); }}
                       className="px-3 py-1 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-medium"
                       style={{ fontFamily: FONT_BODY }}
                     >
-                      Done — Exit
+                      Done — Save &amp; Exit
                     </button>
                   </div>
                   <p className="text-xs text-purple-600 mb-2" style={{ fontFamily: FONT_BODY }}>
@@ -1731,7 +1739,7 @@ export default function Home() {
                               )}
                               {hasLetter && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-                                  <circle cx="50" cy="50" r="42" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="2" />
                                 </svg>
                               )}
                             </div>
@@ -1843,7 +1851,7 @@ export default function Home() {
                               )}
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-                                  <circle cx="50" cy="50" r="42" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                  <circle cx="50" cy="50" r="48" fill="none" stroke="#7c3aed" strokeWidth="2" />
                                 </svg>
                               )}
                             </div>
