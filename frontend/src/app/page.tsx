@@ -786,18 +786,21 @@ export default function Home() {
             const midY = cy + cellSize / 2;
             const rad = cellSize * 0.48;
             if (num > 0) {
-              // 3/4 circle: skip top-left quadrant (270° arc from left-center to top-center)
-              const k = 0.5522847498; // bezier approx for quarter circle
-              const kr = k * rad;
-              // Arc from left to bottom to right to top (skipping top-left)
-              pdf.lines(
-                [
-                  [0, kr, -kr, rad, 0, rad],           // left-center → bottom-center
-                  [kr, 0, rad, -kr, rad, 0],            // bottom-center → right-center
-                  [0, -kr, kr, -rad, 0, -rad],          // right-center → top-center
-                ],
-                midX - rad, midY, [1, 1], null, false
-              );
+              // 3/4 circle: gap centered on top-left corner (~225° to ~315°)
+              // Draw arc as line segments from 315° to 225° going clockwise (the long way)
+              const startAngle = 315 * (Math.PI / 180);
+              const endAngle = 225 * (Math.PI / 180);
+              const segments = 40;
+              const totalAngle = (2 * Math.PI) - (startAngle - endAngle);
+              for (let s = 0; s < segments; s++) {
+                const a1 = startAngle - (s / segments) * totalAngle;
+                const a2 = startAngle - ((s + 1) / segments) * totalAngle;
+                const x1 = midX + rad * Math.cos(a1);
+                const y1 = midY - rad * Math.sin(a1);
+                const x2 = midX + rad * Math.cos(a2);
+                const y2 = midY - rad * Math.sin(a2);
+                pdf.line(x1, y1, x2, y2);
+              }
             } else {
               pdf.circle(midX, midY, rad);
             }
@@ -1041,16 +1044,19 @@ export default function Home() {
             const midY = cy + largeCellSize / 2;
             const rad = largeCellSize * 0.48;
             if (num > 0) {
-              const k = 0.5522847498;
-              const kr = k * rad;
-              pdf.lines(
-                [
-                  [0, kr, -kr, rad, 0, rad],
-                  [kr, 0, rad, -kr, rad, 0],
-                  [0, -kr, kr, -rad, 0, -rad],
-                ],
-                midX - rad, midY, [1, 1], null, false
-              );
+              const startAngle = 315 * (Math.PI / 180);
+              const endAngle = 225 * (Math.PI / 180);
+              const segments = 40;
+              const totalAngle = (2 * Math.PI) - (startAngle - endAngle);
+              for (let s = 0; s < segments; s++) {
+                const a1 = startAngle - (s / segments) * totalAngle;
+                const a2 = startAngle - ((s + 1) / segments) * totalAngle;
+                const x1 = midX + rad * Math.cos(a1);
+                const y1 = midY - rad * Math.sin(a1);
+                const x2 = midX + rad * Math.cos(a2);
+                const y2 = midY - rad * Math.sin(a2);
+                pdf.line(x1, y1, x2, y2);
+              }
             } else {
               pdf.circle(midX, midY, rad);
             }
@@ -1886,7 +1892,7 @@ export default function Home() {
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
                                   {result.numberGrid[r][c] > 0 ? (
-                                    <path d="M 2,50 A 48,48 0 1,0 50,2" fill="none" stroke="#000" strokeWidth="3" />
+                                    <path d="M 16,12 A 48,48 0 1,0 12,16" fill="none" stroke="#000" strokeWidth="3" />
                                   ) : (
                                     <circle cx="50" cy="50" r="48" fill="none" stroke="#000" strokeWidth="3" />
                                   )}
