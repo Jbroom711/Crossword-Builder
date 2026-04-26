@@ -788,9 +788,9 @@ export default function Home() {
             if (num > 0) {
               // 3/4 circle: gap centered on top-left corner (~225° to ~315°)
               // Draw arc as line segments from 315° to 225° going clockwise (the long way)
-              // 285° arc starting from left-center (180°), leaving 75° gap at top-left
-              const arcStart = 180 * (Math.PI / 180);
-              const arcSweep = 285 * (Math.PI / 180);
+              // 292° arc starting from 12 o'clock (90°), leaving 68° gap at top-left
+              const arcStart = 90 * (Math.PI / 180);
+              const arcSweep = 292 * (Math.PI / 180);
               const segments = 40;
               for (let s = 0; s < segments; s++) {
                 const a1 = arcStart - (s / segments) * arcSweep;
@@ -1044,9 +1044,9 @@ export default function Home() {
             const midY = cy + largeCellSize / 2;
             const rad = largeCellSize * 0.48;
             if (num > 0) {
-              // 285° arc starting from left-center (180°), leaving 75° gap at top-left
-              const arcStart = 180 * (Math.PI / 180);
-              const arcSweep = 285 * (Math.PI / 180);
+              // 292° arc starting from 12 o'clock (90°), leaving 68° gap at top-left
+              const arcStart = 90 * (Math.PI / 180);
+              const arcSweep = 292 * (Math.PI / 180);
               const segments = 40;
               for (let s = 0; s < segments; s++) {
                 const a1 = arcStart - (s / segments) * arcSweep;
@@ -1892,7 +1892,7 @@ export default function Home() {
                               {cell !== null && isHiddenMessageCell(r, c) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
                                   {result.numberGrid[r][c] > 0 ? (
-                                    <path d="M 2,50 A 48,48 0 1,0 43,4" fill="none" stroke="#000" strokeWidth="3" />
+                                    <path d="M 50,2 A 48,48 0 1,0 15,9" fill="none" stroke="#000" strokeWidth="3" />
                                   ) : (
                                     <circle cx="50" cy="50" r="48" fill="none" stroke="#000" strokeWidth="3" />
                                   )}
