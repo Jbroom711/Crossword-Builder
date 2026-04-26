@@ -739,7 +739,7 @@ export default function Home() {
       pdf.setTextColor(80);
       pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
       pdf.setTextColor(0);
-      y += 10;
+      y += 4;
     }
 
     // Layout: grid flush left, Down clues column to the right, Across clues below grid
@@ -749,7 +749,7 @@ export default function Home() {
     // Reserve right column for Down clues (at least 160pt)
     const downColWidth = Math.max(160, usable * 0.32);
     const gridMaxW = usable - downColWidth - gap;
-    const gridMaxH = (bottomLimit - y) * 0.52;
+    const gridMaxH = (bottomLimit - y) * 0.50;
     const cellSize = Math.min(Math.floor(gridMaxW / cols), Math.floor(gridMaxH / rows), 28);
     const gridW = cellSize * cols;
     const gridX = margin; // flush left
@@ -1008,7 +1008,7 @@ export default function Home() {
       pdf.setTextColor(80);
       pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
       pdf.setTextColor(0);
-      y += 10;
+      y += 4;
     }
 
     const cols = result.size.cols;
