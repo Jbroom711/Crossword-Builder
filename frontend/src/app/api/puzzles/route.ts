@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, byline, date, clues, result, manualGrid, manualGridSize } = body;
+  const { id, title, byline, date, clues, result, manualGrid, manualGridSize, hiddenMessageCells, hiddenMessageText } = body;
 
   if (id) {
     // Update existing puzzle
@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
         result,
         manual_grid: manualGrid || null,
         manual_grid_size: manualGridSize || null,
+        hidden_message_cells: hiddenMessageCells || [],
+        hidden_message_text: hiddenMessageText || "",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
@@ -68,6 +70,8 @@ export async function POST(req: NextRequest) {
         result,
         manual_grid: manualGrid || null,
         manual_grid_size: manualGridSize || null,
+        hidden_message_cells: hiddenMessageCells || [],
+        hidden_message_text: hiddenMessageText || "",
       })
       .select()
       .single();

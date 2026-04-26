@@ -187,6 +187,23 @@ export default function Home() {
   const [manualDirection, setManualDirection] = useState<"across" | "down">("across");
   const manualGridRef = useRef<HTMLDivElement>(null);
 
+  // Hidden message state
+  const [hiddenMessageMode, setHiddenMessageMode] = useState(false);
+  const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
+  const [hiddenMessageText, setHiddenMessageText] = useState("");
+
+  function isHiddenMessageCell(r: number, c: number) {
+    return hiddenMessageCells.some((cell) => cell.r === r && cell.c === c);
+  }
+
+  function toggleHiddenMessageCell(r: number, c: number) {
+    if (isHiddenMessageCell(r, c)) {
+      setHiddenMessageCells(hiddenMessageCells.filter((cell) => !(cell.r === r && cell.c === c)));
+    } else {
+      setHiddenMessageCells([...hiddenMessageCells, { r, c }]);
+    }
+  }
+
   // Load saved puzzles from API (if signed in) or localStorage (if not)
   // If signed in and localStorage has puzzles, migrate them to the cloud
   useEffect(() => {
@@ -558,6 +575,8 @@ export default function Home() {
             result,
             manualGrid: manualGrid.length > 0 ? manualGrid : null,
             manualGridSize: manualGrid.length > 0 ? manualGridSize : null,
+            hiddenMessageCells,
+            hiddenMessageText,
           }),
         });
         const saved = await res.json();
@@ -609,6 +628,8 @@ export default function Home() {
         } else if (full.result) {
           buildManualGrid(full.result);
         }
+        setHiddenMessageCells(full.hidden_message_cells || []);
+        setHiddenMessageText(full.hidden_message_text || "");
       } catch {
         setError("Failed to load puzzle");
       }
@@ -733,6 +754,13 @@ export default function Home() {
             pdf.setFontSize(cellSize * 0.55);
             pdf.text(cell, cx + cellSize / 2, cy + cellSize * 0.72, { align: "center" });
           }
+          // Hidden message circle
+          if (cell !== null && isHiddenMessageCell(r, c)) {
+            pdf.setDrawColor(124, 58, 237);
+            pdf.setLineWidth(0.5);
+            pdf.circle(cx + cellSize / 2, cy + cellSize / 2, cellSize * 0.42);
+            pdf.setDrawColor(0);
+          }
         }
       }
     }
@@ -745,6 +773,11 @@ export default function Home() {
     pdf.setFontSize(5);
     pdf.setTextColor(150);
     pdf.text("A JSham Crossword Build", gridX + gridW, gridBottomY + 6, { align: "right" });
+    if (hiddenMessageCells.length > 0) {
+      pdf.setTextColor(100);
+      pdf.setFontSize(6);
+      pdf.text("The letters in the circles spell a hidden message.", gridX, gridBottomY + 6);
+    }
     pdf.setTextColor(0);
     const rightColX = gridX + gridW + gap;
     const rightColW = pw - margin - rightColX; // stretch to right page edge
@@ -954,6 +987,13 @@ export default function Home() {
             pdf.setFontSize(Math.max(5, largeCellSize * 0.12));
             pdf.text(String(num), cx + 1.5, cy + Math.max(5, largeCellSize * 0.14));
           }
+          // Hidden message circle
+          if (cell !== null && isHiddenMessageCell(r, c)) {
+            pdf.setDrawColor(124, 58, 237);
+            pdf.setLineWidth(0.5);
+            pdf.circle(cx + largeCellSize / 2, cy + largeCellSize / 2, largeCellSize * 0.42);
+            pdf.setDrawColor(0);
+          }
         }
       }
     }
@@ -966,6 +1006,11 @@ export default function Home() {
     pdf.setFontSize(5);
     pdf.setTextColor(150);
     pdf.text("A JSham Crossword Build", gridX + gridW, largeGridBottom + 6, { align: "right" });
+    if (hiddenMessageCells.length > 0) {
+      pdf.setTextColor(100);
+      pdf.setFontSize(6);
+      pdf.text("The letters in the circles spell a hidden message.", gridX, largeGridBottom + 6);
+    }
     pdf.setTextColor(0);
 
     // === PAGE 2: Header + Two-column clues ===
@@ -1177,6 +1222,9 @@ export default function Home() {
                         setManualGridSize({ rows: 0, cols: 0 });
                         setSelectedCell(null);
                         setMode("auto");
+                        setHiddenMessageMode(false);
+                        setHiddenMessageCells([]);
+                        setHiddenMessageText("");
                         setError(null);
                         setSaveTimestamp(null);
                       },
@@ -1426,6 +1474,52 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Hidden Message */}
+              <div className="mt-3">
+                <button
+                  onClick={() => setHiddenMessageMode(!hiddenMessageMode)}
+                  className={`w-full py-2 text-sm rounded-lg transition font-medium border-2 ${
+                    hiddenMessageMode
+                      ? "border-purple-600 bg-purple-600 text-white"
+                      : "border-purple-400 text-purple-600 hover:bg-purple-50"
+                  }`}
+                  style={{ fontFamily: FONT_BODY }}
+                >
+                  {hiddenMessageMode ? "Done — Exit Hidden Message" : "Add Hidden Message"}
+                </button>
+                {hiddenMessageMode && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-xs text-gray-500" style={{ fontFamily: FONT_BODY }}>
+                      Click cells in the grid to select letters for the hidden message. Click again to deselect.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
+                      <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
+                        {hiddenMessageCells.length > 0
+                          ? hiddenMessageCells.map((cell) => result?.grid[cell.r]?.[cell.c] || "?").join("")
+                          : "—"}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Intended message (optional, for reference)"
+                      value={hiddenMessageText}
+                      onChange={(e) => setHiddenMessageText(e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      style={{ fontFamily: FONT_BODY }}
+                    />
+                    {hiddenMessageCells.length > 0 && (
+                      <button
+                        onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); }}
+                        className="text-xs text-red-500 hover:text-red-700 transition"
+                      >
+                        Clear all selections
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="mt-3 flex gap-3">
                 <button
                   onClick={savePuzzle}
@@ -1575,6 +1669,11 @@ export default function Home() {
                                   {cell}
                                 </span>
                               )}
+                              {hasLetter && isHiddenMessageCell(r, c) && (
+                                <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+                                  <circle cx="50" cy="50" r="42" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                </svg>
+                              )}
                             </div>
                           );
                         })
@@ -1667,11 +1766,20 @@ export default function Home() {
                             <div
                               key={`${r}-${c}`}
                               className={`crossword-cell ${cell === null ? "black" : ""}`}
+                              onClick={() => {
+                                if (hiddenMessageMode && cell !== null) toggleHiddenMessageCell(r, c);
+                              }}
+                              style={{ cursor: hiddenMessageMode && cell !== null ? "pointer" : undefined }}
                             >
                               {cell !== null && result.numberGrid[r][c] > 0 && (
                                 <span className="cell-number">
                                   {result.numberGrid[r][c]}
                                 </span>
+                              )}
+                              {cell !== null && isHiddenMessageCell(r, c) && (
+                                <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+                                  <circle cx="50" cy="50" r="42" fill="none" stroke="#7c3aed" strokeWidth="3" />
+                                </svg>
                               )}
                             </div>
                           ))
