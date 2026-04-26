@@ -1001,6 +1001,7 @@ export default function Home() {
 
     // === PAGE 1: Header + Large Grid ===
     let y = drawHeader(margin);
+    y += 10; // breathing room after byline
 
     if (hiddenMessageCells.length > 0) {
       pdf.setFont("helvetica", "normal");
