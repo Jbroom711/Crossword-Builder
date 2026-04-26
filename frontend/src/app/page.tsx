@@ -1751,8 +1751,12 @@ export default function Home() {
                             <div
                               key={`${r}-${c}`}
                               onClick={() => {
-                                handleCellClick(r, c);
-                                manualGridRef.current?.focus();
+                                if (hiddenMessageMode && hasLetter) {
+                                  toggleHiddenMessageCell(r, c);
+                                } else {
+                                  handleCellClick(r, c);
+                                  manualGridRef.current?.focus();
+                                }
                               }}
                               className="relative flex items-center justify-center cursor-pointer"
                               style={{
