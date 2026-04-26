@@ -1210,8 +1210,8 @@ export default function Home() {
       </header>
 
       <div className={`grid grid-cols-1 ${hiddenMessageMode ? "" : "lg:grid-cols-2"} gap-8`}>
-        {/* Left: Input Panel */}
-        <div>
+        {/* Left: Input Panel — hidden in Hidden Message mode */}
+        <div className={hiddenMessageMode ? "hidden" : ""}>
           {/* Puzzle title + New Puzzle */}
           <div className="mb-5">
             <div className="flex items-center justify-between mb-1">
