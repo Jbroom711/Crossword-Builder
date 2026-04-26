@@ -1752,7 +1752,7 @@ export default function Home() {
                               key={`${r}-${c}`}
                               onClick={() => {
                                 if (hiddenMessageMode && hasLetter) {
-                                  toggleHiddenMessageCell(r, c);
+                                  toggleHiddenMessageCell(r - MANUAL_PADDING, c - MANUAL_PADDING);
                                 } else {
                                   handleCellClick(r, c);
                                   manualGridRef.current?.focus();
@@ -1782,7 +1782,7 @@ export default function Home() {
                                   {cell}
                                 </span>
                               )}
-                              {hasLetter && isHiddenMessageCell(r, c) && (
+                              {hasLetter && isHiddenMessageCell(r - MANUAL_PADDING, c - MANUAL_PADDING) && (
                                 <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
                                   <circle cx="50" cy="50" r="48" fill="none" stroke="#000" strokeWidth="3" />
                                 </svg>
