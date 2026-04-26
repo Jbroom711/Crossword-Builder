@@ -244,7 +244,10 @@ export default function Home() {
       })();
     } else {
       const raw = localStorage.getItem("crossword_puzzles");
-      if (raw) setSavedPuzzles(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setSavedPuzzles(parsed);
+      }
     }
   }, [isLoaded, isSignedIn]);
 
@@ -1206,7 +1209,7 @@ export default function Home() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className={`grid grid-cols-1 ${hiddenMessageMode ? "" : "lg:grid-cols-2"} gap-8`}>
         {/* Left: Input Panel */}
         <div>
           {/* Puzzle title + New Puzzle */}
@@ -1693,49 +1696,51 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Clue lists */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <h3
-                        className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
-                        style={{ fontFamily: FONT_HEADING }}
-                      >
-                        Across
-                      </h3>
-                      <ol className="space-y-1">
-                        {acrossClues?.map((w) => (
-                          <li
-                            key={w.number}
-                            className="text-sm"
-                            style={{ fontFamily: FONT_BODY }}
-                          >
-                            <span className="font-bold mr-1">{w.number}</span>
-                            {w.clue || <span className="text-gray-400 italic">no clue yet</span>}
-                          </li>
-                        ))}
-                      </ol>
+                  {/* Clue lists — hidden in Hidden Message mode */}
+                  {!hiddenMessageMode && (
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <h3
+                          className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
+                          style={{ fontFamily: FONT_HEADING }}
+                        >
+                          Across
+                        </h3>
+                        <ol className="space-y-1">
+                          {acrossClues?.map((w) => (
+                            <li
+                              key={w.number}
+                              className="text-sm"
+                              style={{ fontFamily: FONT_BODY }}
+                            >
+                              <span className="font-bold mr-1">{w.number}</span>
+                              {w.clue || <span className="text-gray-400 italic">no clue yet</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                      <div>
+                        <h3
+                          className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
+                          style={{ fontFamily: FONT_HEADING }}
+                        >
+                          Down
+                        </h3>
+                        <ol className="space-y-1">
+                          {downClues?.map((w) => (
+                            <li
+                              key={w.number}
+                              className="text-sm"
+                              style={{ fontFamily: FONT_BODY }}
+                            >
+                              <span className="font-bold mr-1">{w.number}</span>
+                              {w.clue || <span className="text-gray-400 italic">no clue yet</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
                     </div>
-                    <div>
-                      <h3
-                        className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
-                        style={{ fontFamily: FONT_HEADING }}
-                      >
-                        Down
-                      </h3>
-                      <ol className="space-y-1">
-                        {downClues?.map((w) => (
-                          <li
-                            key={w.number}
-                            className="text-sm"
-                            style={{ fontFamily: FONT_BODY }}
-                          >
-                            <span className="font-bold mr-1">{w.number}</span>
-                            {w.clue || <span className="text-gray-400 italic">no clue yet</span>}
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  </div>
+                  )}
                 </div>
               ) : (
                 /* ===== AUTO MODE (printable) ===== */
@@ -1799,48 +1804,50 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <h3
-                          className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
-                          style={{ fontFamily: FONT_HEADING }}
-                        >
-                          Across
-                        </h3>
-                        <ol className="space-y-1">
-                          {acrossClues?.map((w) => (
-                            <li
-                              key={w.number}
-                              className="text-sm"
-                              style={{ fontFamily: FONT_BODY }}
-                            >
-                              <span className="font-bold mr-1">{w.number}</span>
-                              {w.clue}
-                            </li>
-                          ))}
-                        </ol>
+                    {!hiddenMessageMode && (
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <h3
+                            className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
+                            style={{ fontFamily: FONT_HEADING }}
+                          >
+                            Across
+                          </h3>
+                          <ol className="space-y-1">
+                            {acrossClues?.map((w) => (
+                              <li
+                                key={w.number}
+                                className="text-sm"
+                                style={{ fontFamily: FONT_BODY }}
+                              >
+                                <span className="font-bold mr-1">{w.number}</span>
+                                {w.clue}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                        <div>
+                          <h3
+                            className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
+                            style={{ fontFamily: FONT_HEADING }}
+                          >
+                            Down
+                          </h3>
+                          <ol className="space-y-1">
+                            {downClues?.map((w) => (
+                              <li
+                                key={w.number}
+                                className="text-sm"
+                                style={{ fontFamily: FONT_BODY }}
+                              >
+                                <span className="font-bold mr-1">{w.number}</span>
+                                {w.clue}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
                       </div>
-                      <div>
-                        <h3
-                          className="font-bold text-lg mb-2 border-b border-gray-300 pb-1"
-                          style={{ fontFamily: FONT_HEADING }}
-                        >
-                          Down
-                        </h3>
-                        <ol className="space-y-1">
-                          {downClues?.map((w) => (
-                            <li
-                              key={w.number}
-                              className="text-sm"
-                              style={{ fontFamily: FONT_BODY }}
-                            >
-                              <span className="font-bold mr-1">{w.number}</span>
-                              {w.clue}
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   {result.unplacedWords.length > 0 && (
