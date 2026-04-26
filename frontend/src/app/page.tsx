@@ -1076,16 +1076,16 @@ export default function Home() {
     pdf.save(`Large Crossword - ${puzzleTitle || "crossword"}.pdf`);
   }
 
-  const acrossClues = result?.placedWords
+  const acrossClues = (result?.placedWords || [])
     .filter((w) => w.direction === "across")
     .sort((a, b) => a.number - b.number);
-  const downClues = result?.placedWords
+  const downClues = (result?.placedWords || [])
     .filter((w) => w.direction === "down")
     .sort((a, b) => a.number - b.number);
 
   // Check if any placed words are missing clue text that exists in the clue list
   const needsSync = (() => {
-    if (!result) return false;
+    if (!result?.placedWords) return false;
     const clueLookup = new Map<string, string>();
     for (const c of clues) {
       if (c.answer.trim() && c.clue.trim()) {
@@ -1101,7 +1101,7 @@ export default function Home() {
 
   // Determine which cells are "locked" (from auto-placed words) in manual mode
   const lockedCells = new Set<string>();
-  if (result) {
+  if (result?.placedWords) {
     for (const w of result.placedWords) {
       const dr = w.direction === "down" ? 1 : 0;
       const dc = w.direction === "across" ? 1 : 0;
@@ -1327,7 +1327,7 @@ export default function Home() {
             {(() => {
               // Build sorted indices: placed clues sorted by direction then number, unplaced at end
               const indices = clues.map((_, i) => i);
-              if (result) {
+              if (result?.placedWords) {
                 indices.sort((a, b) => {
                   const pa = result.placedWords.find((w) => w.answer === clues[a].answer.toUpperCase());
                   const pb = result.placedWords.find((w) => w.answer === clues[b].answer.toUpperCase());
@@ -1761,8 +1761,8 @@ export default function Home() {
                           gridTemplateColumns: `repeat(${result.size.cols}, var(--cell-size))`,
                         }}
                       >
-                        {result.grid.map((row, r) =>
-                          row.map((cell, c) => (
+                        {(result.grid || []).map((row, r) =>
+                          (row || []).map((cell, c) => (
                             <div
                               key={`${r}-${c}`}
                               className={`crossword-cell ${cell === null ? "black" : ""}`}
