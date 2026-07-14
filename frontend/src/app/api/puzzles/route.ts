@@ -15,7 +15,11 @@ async function getUserId(): Promise<string | null> {
 export async function GET() {
   const userId = await getUserId();
   if (!userId) {
-    return NextResponse.json([], { status: 200 });
+    // The client only calls this when it believes the user is signed in, so a
+    // missing userId here means the server session couldn't be verified (e.g.
+    // Clerk middleware misconfigured). Surface it instead of masquerading as an
+    // empty list — otherwise "auth broken" looks identical to "no puzzles."
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { data, error } = await supabase

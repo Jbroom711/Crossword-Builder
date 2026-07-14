@@ -210,28 +210,45 @@ export default function Home() {
     if (!isLoaded) return;
     if (isSignedIn) {
       (async () => {
-        // Check for localStorage puzzles to migrate
+        // Check for localStorage puzzles to migrate to the cloud
         const raw = localStorage.getItem("crossword_puzzles");
         if (raw) {
           try {
             const localPuzzles = JSON.parse(raw) as SavedPuzzle[];
+            let allMigrated = true;
             for (const p of localPuzzles) {
-              await fetch("/api/puzzles", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  title: p.title,
-                  byline: p.byline || "",
-                  date: p.date,
-                  clues: p.clues,
-                  result: p.result,
-                  manualGrid: p.manualGrid || null,
-                  manualGridSize: p.manualGridSize || null,
-                }),
-              });
+              try {
+                const res = await fetch("/api/puzzles", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    title: p.title,
+                    byline: p.byline || "",
+                    date: p.date,
+                    clues: p.clues,
+                    result: p.result,
+                    manualGrid: p.manualGrid || null,
+                    manualGridSize: p.manualGridSize || null,
+                  }),
+                });
+                if (!res.ok) allMigrated = false;
+              } catch {
+                allMigrated = false;
+              }
             }
-            localStorage.removeItem("crossword_puzzles");
-          } catch {}
+            // Only delete the local copy once EVERY puzzle is confirmed in the
+            // cloud. A silent failure here used to wipe localStorage anyway,
+            // permanently losing puzzles that never uploaded.
+            if (allMigrated) {
+              localStorage.removeItem("crossword_puzzles");
+            } else {
+              setError(
+                "Some puzzles couldn't be uploaded to your account and are still saved locally in this browser. Please try again."
+              );
+            }
+          } catch {
+            // Malformed localStorage — leave it untouched rather than risk loss.
+          }
         }
         // Load from API
         try {
@@ -239,14 +256,28 @@ export default function Home() {
           if (res.ok) {
             const data = await res.json();
             if (Array.isArray(data)) setSavedPuzzles(data);
+          } else if (res.status === 401) {
+            setError(
+              "You appear to be signed in, but your session couldn't be verified. Try refreshing the page."
+            );
+          } else {
+            setError(
+              "Couldn't load your saved puzzles (server error). Your puzzles are safe in your account — please try again shortly."
+            );
           }
-        } catch {}
+        } catch {
+          setError(
+            "Couldn't reach the server to load your saved puzzles. Check your connection and try again."
+          );
+        }
       })();
     } else {
       const raw = localStorage.getItem("crossword_puzzles");
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) setSavedPuzzles(parsed);
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) setSavedPuzzles(parsed);
+        } catch {}
       }
     }
   }, [isLoaded, isSignedIn]);
@@ -586,8 +617,17 @@ export default function Home() {
             hiddenMessageText,
           }),
         });
+        if (!res.ok) {
+          // Don't set a save timestamp — that would falsely tell the user the
+          // puzzle was saved when it wasn't.
+          setError(
+            "Couldn't save to your account. Your puzzle is NOT saved yet — please try again."
+          );
+          return;
+        }
         const saved = await res.json();
         if (saved.id) setCurrentPuzzleId(saved.id);
+        setError(null);
         // Refresh list
         try {
           const listRes = await fetch("/api/puzzles");
@@ -596,7 +636,12 @@ export default function Home() {
             if (Array.isArray(list)) setSavedPuzzles(list);
           }
         } catch {}
-      } catch {}
+      } catch {
+        setError(
+          "Couldn't reach the server to save. Your puzzle is NOT saved yet — please try again."
+        );
+        return;
+      }
     } else {
       // Fall back to localStorage
       const puzzle: SavedPuzzle = {
@@ -681,6 +726,52 @@ export default function Home() {
       const updated = savedPuzzles.filter((p) => p.id !== id);
       setSavedPuzzles(updated);
       localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
+    }
+  }
+
+  // Download every saved puzzle as a single JSON file — a portable backup that
+  // doesn't depend on the database staying alive.
+  async function exportPuzzles() {
+    if (savedPuzzles.length === 0) return;
+    try {
+      let puzzles: unknown[];
+      if (isSignedIn) {
+        // The list holds only summaries; fetch each puzzle's full contents so
+        // the backup is complete (clues, grid, hidden message, etc.).
+        puzzles = await Promise.all(
+          savedPuzzles.map(async (p) => {
+            try {
+              const res = await fetch(`/api/puzzles/${p.id}`);
+              if (res.ok) return await res.json();
+            } catch {}
+            return p; // fall back to the summary if the full fetch fails
+          })
+        );
+      } else {
+        puzzles = savedPuzzles;
+      }
+      const payload = {
+        app: "Crossword Builder",
+        exportedAt: new Date().toISOString(),
+        count: puzzles.length,
+        puzzles,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `crossword-puzzles-backup-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setError(null);
+    } catch {
+      setError("Couldn't export your puzzles. Please try again.");
     }
   }
 
@@ -1335,6 +1426,16 @@ export default function Home() {
               >
                 {showSaved ? "Hide Saved" : `Saved (${savedPuzzles.length})`}
               </button>
+              {savedPuzzles.length > 0 && (
+                <button
+                  onClick={exportPuzzles}
+                  title="Download a JSON backup of all your saved puzzles"
+                  className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
+                  style={{ fontFamily: FONT_BODY }}
+                >
+                  Export
+                </button>
+              )}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
