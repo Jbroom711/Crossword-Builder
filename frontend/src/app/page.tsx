@@ -222,6 +222,9 @@ export default function Home() {
   const [selectedCell, setSelectedCell] = useState<{ r: number; c: number } | null>(null);
   const [manualDirection, setManualDirection] = useState<"across" | "down">("across");
   const manualGridRef = useRef<HTMLDivElement>(null);
+  // True once the user has edited the grid in manual mode — used to grey out the
+  // Generate button (regenerating would discard their manual layout).
+  const [manualChanged, setManualChanged] = useState(false);
 
   // Hidden message state
   const [hiddenMessageMode, setHiddenMessageMode] = useState(false);
@@ -649,6 +652,7 @@ export default function Home() {
     }
     setManualGrid(grid);
     setManualGridSize({ rows: padR, cols: padC });
+    setManualChanged(false); // fresh grid from a (re)generation
   }
 
   function handleCellClick(r: number, c: number) {
@@ -672,6 +676,7 @@ export default function Home() {
         const updated = manualGrid.map((row) => [...row]);
         updated[r][c] = e.key.toUpperCase();
         setManualGrid(updated);
+        setManualChanged(true);
         // Advance cursor
         const nr = r + dr;
         const nc = c + dc;
@@ -684,6 +689,7 @@ export default function Home() {
         if (updated[r][c]) {
           updated[r][c] = null;
           setManualGrid(updated);
+          setManualChanged(true);
         } else {
           // Move back
           const pr = r - dr;
@@ -691,6 +697,7 @@ export default function Home() {
           if (pr >= 0 && pc >= 0) {
             updated[pr][pc] = null;
             setManualGrid(updated);
+            setManualChanged(true);
             setSelectedCell({ r: pr, c: pc });
           }
         }
@@ -970,6 +977,7 @@ export default function Home() {
     }
     // Dismiss any pending restore banner — the user chose a specific puzzle.
     setDraftToRestore(null);
+    setManualChanged(false);
     setShowSaved(false);
   }
 
@@ -1462,7 +1470,9 @@ export default function Home() {
 
     // === PAGE 2: Header + Two-column clues ===
     pdf.addPage();
-    y = drawHeader(margin);
+    // Match the grid page: start the title lower so it clears the printer's
+    // non-printable top edge. The clue auto-fit absorbs the reduced height.
+    y = drawHeader(margin + 24);
 
     const acr = result.placedWords
       .filter((w) => w.direction === "across")
@@ -1753,6 +1763,7 @@ export default function Home() {
                         setHiddenMessageText("");
                         setError(null);
                         setSaveTimestamp(null);
+                        setManualChanged(false);
                         pendingBaselineRef.current = true;
                         setDraftToRestore(null);
                       },
@@ -1958,7 +1969,11 @@ export default function Home() {
           <button
             onClick={handleGenerate}
             disabled={loading}
-            className="mt-4 w-full py-3 bg-black text-white font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-50 transition text-base"
+            className={`mt-4 w-full py-3 font-semibold rounded-lg disabled:opacity-50 transition text-base ${
+              mode === "manual" && manualChanged
+                ? "bg-gray-200 text-gray-500 hover:bg-gray-300" // de-emphasized after manual edits (still clickable; will confirm before re-laying out)
+                : "bg-black text-white hover:bg-gray-800"
+            }`}
             style={{ fontFamily: FONT_BODY }}
           >
             {loading ? "Generating..." : "Generate Crossword"}
@@ -1972,14 +1987,16 @@ export default function Home() {
           >
             {currentPuzzleId ? "Save Changes" : "Save Puzzle"}
           </button>
-          <p
-            className="mt-1.5 text-xs text-center text-gray-400"
-            style={{ fontFamily: FONT_BODY }}
-          >
-            {dirty
-              ? "Draft autosaved in this browser — click Save to keep it in your library."
-              : "You can Save anytime — even before generating the grid."}
-          </p>
+          {(dirty || saveTimestamp) && (
+            <p
+              className="mt-1.5 text-xs text-center text-gray-400"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              {dirty
+                ? "Draft autosaved in this browser — click Save to keep it in your library."
+                : `Saved on ${saveTimestamp}`}
+            </p>
+          )}
 
           {error && (
             <p className="mt-3 text-red-600 text-sm font-medium">{error}</p>
@@ -2131,11 +2148,6 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              {saveTimestamp && (
-                <p className="mt-1.5 text-xs text-gray-400" style={{ fontFamily: FONT_BODY }}>
-                  Saved on {saveTimestamp}
-                </p>
-              )}
             </>
           )}
 
