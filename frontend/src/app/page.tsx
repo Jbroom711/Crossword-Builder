@@ -1453,6 +1453,10 @@ export default function Home() {
     .filter((w) => w.direction === "down")
     .sort((a, b) => a.number - b.number);
 
+  // Total number of clues in the puzzle (entries that have an answer).
+  const clueCount = clues.filter((c) => c.answer.trim()).length;
+  const clueCountLabel = `${clueCount} ${clueCount === 1 ? "clue" : "clues"}`;
+
   // Check if any placed words are missing clue text that exists in the clue list
   const needsSync = (() => {
     if (!result?.placedWords) return false;
@@ -1664,6 +1668,11 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold" style={{ fontFamily: FONT_HEADING }}>
               Clues
+              {clueCount > 0 && (
+                <span className="ml-2 text-sm font-normal text-gray-400">
+                  ({clueCount})
+                </span>
+              )}
             </h2>
             <div className="flex gap-2">
               <button
@@ -1780,7 +1789,15 @@ export default function Home() {
                     updateClue(i, "answer", e.target.value.toUpperCase())
                   }
                   className="w-32 shrink-0 px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black uppercase"
-                  style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                  style={{
+                    fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif",
+                    // Answers still needing a clue show in blue; revert to black
+                    // once a clue is written, to make gaps easy to spot.
+                    color:
+                      clue.answer.trim() && !clue.clue.trim() ? "#2563eb" : undefined,
+                    fontWeight:
+                      clue.answer.trim() && !clue.clue.trim() ? 600 : undefined,
+                  }}
                 />
                 <input
                   type="text"
@@ -2128,7 +2145,7 @@ export default function Home() {
                       className="text-sm text-gray-500 mt-0.5"
                       style={{ fontFamily: FONT_BODY }}
                     >
-                      {puzzleDate}
+                      {puzzleDate} &middot; {clueCountLabel}
                     </p>
                   </div>
 
@@ -2272,7 +2289,7 @@ export default function Home() {
                         className="text-sm text-gray-500 mt-0.5"
                         style={{ fontFamily: FONT_BODY }}
                       >
-                        {puzzleDate}
+                        {puzzleDate} &middot; {clueCountLabel}
                       </p>
                     </div>
 
