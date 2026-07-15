@@ -1396,12 +1396,54 @@ export default function Home() {
 
     const colGap = 16;
     const colWidth = (usable - colGap) / 2;
-    const lineH = 11;
 
-    function drawClueColumn(title: string, clueList: PlacedWord[], x: number, startY: number) {
-      let cy = startY;
+    y += 12;
+    const cluesTop = y;
+    const availH = bottomLimit - cluesTop;
+    const TITLE_FS = 13;
+    const IDEAL_FS = 9.5;
+    const MIN_FS = 4.5;
+
+    const numFontSize = (fs: number) => Math.max(4, fs - 0.5);
+    const lineHeight = (fs: number) => fs * 1.2;
+
+    // Vertical space one column needs at a given clue font size: divider + gap +
+    // every clue (with wrapping recomputed for that size).
+    function columnHeight(clueList: PlacedWord[], fs: number): number {
+      const lineH = lineHeight(fs);
+      pdf.setFont(clueFont, "bold");
+      pdf.setFontSize(numFontSize(fs));
+      let maxNumW = 0;
+      for (const cl of clueList) {
+        const w = pdf.getTextWidth(`${cl.number}. `);
+        if (w > maxNumW) maxNumW = w;
+      }
+      const textIndent = maxNumW + 2;
+      pdf.setFont(clueFont, "normal");
+      pdf.setFontSize(fs);
+      let h = 4 + lineH; // divider + gap before first clue
+      for (const cl of clueList) {
+        const lines = pdf.splitTextToSize(cl.clue || "(no clue)", colWidth - textIndent);
+        h += Math.max(1, lines.length) * lineH;
+      }
+      return h;
+    }
+
+    // Shrink from the ideal size until BOTH Across and Down fit on this one page.
+    let clueFS = IDEAL_FS;
+    while (clueFS > MIN_FS) {
+      const need = Math.max(columnHeight(acr, clueFS), columnHeight(dwn, clueFS));
+      if (need <= availH) break;
+      clueFS = Math.round((clueFS - 0.25) * 100) / 100;
+    }
+
+    function drawClueColumn(title: string, clueList: PlacedWord[], x: number) {
+      const fs = clueFS;
+      const numFs = numFontSize(fs);
+      const lineH = lineHeight(fs);
+      let cy = cluesTop;
       pdf.setFont("times", "bold");
-      pdf.setFontSize(13);
+      pdf.setFontSize(TITLE_FS);
       pdf.text(title, x, cy);
       cy += 4;
       pdf.setLineWidth(0.5);
@@ -1410,7 +1452,7 @@ export default function Home() {
 
       // Tab-aligned numbers
       pdf.setFont(clueFont, "bold");
-      pdf.setFontSize(9);
+      pdf.setFontSize(numFs);
       let maxNumW = 0;
       for (const cl of clueList) {
         const w = pdf.getTextWidth(`${cl.number}. `);
@@ -1420,28 +1462,23 @@ export default function Home() {
 
       for (const cl of clueList) {
         pdf.setFont(clueFont, "normal");
-        pdf.setFontSize(9.5);
+        pdf.setFontSize(fs);
         const lines = pdf.splitTextToSize(cl.clue || "(no clue)", colWidth - textIndent);
 
         pdf.setFont(clueFont, "bold");
-        pdf.setFontSize(9);
+        pdf.setFontSize(numFs);
         pdf.text(`${cl.number}.`, x, cy);
         pdf.setFont(clueFont, "normal");
-        pdf.setFontSize(9.5);
+        pdf.setFontSize(fs);
         for (let l = 0; l < lines.length; l++) {
-          if (cy > bottomLimit) {
-            pdf.addPage();
-            cy = margin;
-          }
           pdf.text(lines[l], x + textIndent, cy);
           cy += lineH;
         }
       }
     }
 
-    y += 12;
-    drawClueColumn("Across", acr, margin, y);
-    drawClueColumn("Down", dwn, margin + colWidth + colGap, y);
+    drawClueColumn("Across", acr, margin);
+    drawClueColumn("Down", dwn, margin + colWidth + colGap);
 
     pdf.save(`Large Crossword - ${puzzleTitle || "crossword"}.pdf`);
   }
