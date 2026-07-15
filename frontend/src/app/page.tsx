@@ -1327,16 +1327,20 @@ export default function Home() {
     }
 
     // === PAGE 1: Header + Large Grid ===
-    let y = drawHeader(margin);
-    y += 10; // breathing room after byline
+    // Start the title lower so it clears the printer's non-printable top edge
+    // (only the top shifts down — the grid's bottom limit is unchanged).
+    let y = drawHeader(margin + 18);
 
     if (hiddenMessageCells.length > 0) {
+      // Note sits close beneath the byline (reduced gap).
       pdf.setFont(bylineFont, "normal"); // match the byline sub-headline font
       pdf.setFontSize(7);
       pdf.setTextColor(80);
       pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
       pdf.setTextColor(0);
-      y += 4;
+      y += 12; // space before the grid
+    } else {
+      y += 10; // breathing room before the grid
     }
 
     const cols = result.size.cols;
@@ -2039,13 +2043,6 @@ export default function Home() {
               </div>
 
               <div className="mt-3 flex gap-3">
-                <button
-                  onClick={savePuzzle}
-                  className="flex-1 py-2 text-sm border-2 border-black rounded-lg hover:bg-gray-100 transition font-medium"
-                  style={{ fontFamily: FONT_BODY }}
-                >
-                  Save Puzzle
-                </button>
                 <button
                   onClick={exportPDF}
                   className="flex-1 py-2 text-sm text-white rounded-lg transition font-medium"
