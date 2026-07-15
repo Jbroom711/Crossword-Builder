@@ -1470,9 +1470,9 @@ export default function Home() {
 
     // === PAGE 2: Header + Two-column clues ===
     pdf.addPage();
-    // Match the grid page: start the title lower so it clears the printer's
-    // non-printable top edge. The clue auto-fit absorbs the reduced height.
-    y = drawHeader(margin + 24);
+    // Nudge only the title/byline down so the title clears the top edge, and let
+    // the clues start right below the byline (tight) so they keep their size.
+    y = drawHeader(margin + 16);
 
     const acr = result.placedWords
       .filter((w) => w.direction === "across")
@@ -1486,7 +1486,7 @@ export default function Home() {
     const colGap = 16;
     const colWidth = (usable - colGap) / 2;
 
-    y += 12;
+    y += 4; // tight gap: clues start just below the byline (keeps clue size)
     const cluesTop = y;
     const availH = bottomLimit - cluesTop;
     const TITLE_FS = 13;
