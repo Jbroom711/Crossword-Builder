@@ -1362,14 +1362,15 @@ export default function Home() {
       pdf.setTextColor(80);
       pdf.text(`${puzzleByline}  //  ${puzzleDate}`, margin, y);
       pdf.setTextColor(0);
-      y += 14;
+      y += 8; // tighter gap below the byline (was 14) — reclaimed for the top
       return y;
     }
 
     // === PAGE 1: Header + Large Grid ===
-    // Start the title lower so it clears the printer's non-printable top edge
-    // (only the top shifts down — the grid's bottom limit is unchanged).
-    let y = drawHeader(margin + 18);
+    // Start the title lower so it clears the printer's non-printable top edge.
+    // The 6pt reclaimed from the byline gap above is added here, so the grid's
+    // top (and therefore the bottom) stays exactly where it was.
+    let y = drawHeader(margin + 24);
 
     if (hiddenMessageCells.length > 0) {
       // Note sits close beneath the byline (reduced gap).
