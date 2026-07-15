@@ -2050,12 +2050,20 @@ export default function Home() {
                   Export PDF&apos;s:
                 </p>
                 <div className="grid grid-cols-2 gap-2">
+                  {/* Left column = answer keys, right column = puzzles; top = compact, bottom = large */}
+                  <button
+                    onClick={exportAnswerKey}
+                    className="py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
+                    Compact Answer Key
+                  </button>
                   <button
                     onClick={exportPDF}
                     className="py-2 text-sm text-white rounded-lg transition font-medium"
-                    style={{ fontFamily: FONT_BODY, background: "#56ca23" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#4ab51f")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#56ca23")}
+                    style={{ fontFamily: FONT_BODY, background: "#e88a1a" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#d07a15")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#e88a1a")}
                   >
                     Compact Puzzle
                   </button>
@@ -2067,18 +2075,11 @@ export default function Home() {
                     Large Answer Key
                   </button>
                   <button
-                    onClick={exportAnswerKey}
-                    className="py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
-                    style={{ fontFamily: FONT_BODY }}
-                  >
-                    Compact Answer Key
-                  </button>
-                  <button
                     onClick={() => exportLarge()}
                     className="py-2 text-sm text-white rounded-lg transition font-medium"
-                    style={{ fontFamily: FONT_BODY, background: "#e88a1a" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "#d07a15")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "#e88a1a")}
+                    style={{ fontFamily: FONT_BODY, background: "#56ca23" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#4ab51f")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#56ca23")}
                   >
                     Large Puzzle (2 pages)
                   </button>
