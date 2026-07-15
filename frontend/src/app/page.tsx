@@ -1331,7 +1331,7 @@ export default function Home() {
     y += 10; // breathing room after byline
 
     if (hiddenMessageCells.length > 0) {
-      pdf.setFont("helvetica", "normal");
+      pdf.setFont(bylineFont, "normal"); // match the byline sub-headline font
       pdf.setFontSize(7);
       pdf.setTextColor(80);
       pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
@@ -2230,6 +2230,15 @@ export default function Home() {
                     </p>
                   </div>
 
+                  {hiddenMessageCells.length > 0 && (
+                    <p
+                      className="text-xs text-gray-500 mb-2"
+                      style={{ fontFamily: FONT_BODY }}
+                    >
+                      The circled letters spell a hidden message when read left to right.
+                    </p>
+                  )}
+
                   <div
                     ref={manualGridRef}
                     className="grid-scroll-container flex justify-start mb-6 outline-none"
@@ -2373,6 +2382,15 @@ export default function Home() {
                         {puzzleDate} &middot; {clueCountLabel}
                       </p>
                     </div>
+
+                    {hiddenMessageCells.length > 0 && (
+                      <p
+                        className="text-xs text-gray-500 mb-2"
+                        style={{ fontFamily: FONT_BODY }}
+                      >
+                        The circled letters spell a hidden message when read left to right.
+                      </p>
+                    )}
 
                     <div className="grid-scroll-container flex justify-start mb-6">
                       <div
