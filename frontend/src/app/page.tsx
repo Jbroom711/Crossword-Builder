@@ -1373,13 +1373,16 @@ export default function Home() {
     let y = drawHeader(margin + 24);
 
     if (hiddenMessageCells.length > 0) {
-      // Note sits close beneath the byline (reduced gap).
+      // Keep the note ADJACENT to the grid: the reclaimed whitespace sits above
+      // the note (below the byline), and the note hugs the grid. Grid top (and
+      // therefore the bottom) is unchanged.
+      y += 8; // whitespace below the byline
       pdf.setFont(bylineFont, "normal"); // match the byline sub-headline font
       pdf.setFontSize(7);
       pdf.setTextColor(80);
       pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
       pdf.setTextColor(0);
-      y += 12; // space before the grid
+      y += 4; // small gap — note sits just above the grid
     } else {
       y += 10; // breathing room before the grid
     }
