@@ -37,11 +37,30 @@ interface SavedPuzzle {
   byline?: string;
   date: string;
   clues: ClueEntry[];
-  result: CrosswordResult;
+  result: CrosswordResult | null;
   savedAt: string;
   manualGrid?: (string | null)[][];
   manualGridSize?: { rows: number; cols: number };
 }
+
+// Full working state autosaved to localStorage so a tab/window close never
+// loses unsaved work. Restored via the banner on next load.
+interface DraftState {
+  savedAt: string;
+  puzzleTitle: string;
+  puzzleByline: string;
+  currentPuzzleId: string | null;
+  clues: ClueEntry[];
+  result: CrosswordResult | null;
+  mode: "auto" | "manual";
+  manualGrid: (string | null)[][];
+  manualGridSize: { rows: number; cols: number };
+  hiddenMessageMode: boolean;
+  hiddenMessageCells: { r: number; c: number }[];
+  hiddenMessageText: string;
+}
+
+const DRAFT_KEY = "crossword_draft";
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-US", {
@@ -192,6 +211,135 @@ export default function Home() {
   const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
   const [hiddenMessageText, setHiddenMessageText] = useState("");
 
+  // Autosave / unsaved-work protection state
+  const [draftToRestore, setDraftToRestore] = useState<DraftState | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justSavedRef = useRef(false);
+  const draftHydrated = useRef(false);
+
+  // True when the user has entered anything worth protecting.
+  function hasEditableContent(
+    title: string,
+    cl: ClueEntry[],
+    res: CrosswordResult | null
+  ): boolean {
+    return (
+      !!res ||
+      title.trim().length > 0 ||
+      cl.some((c) => c.answer.trim() || c.clue.trim())
+    );
+  }
+
+  // On first mount, surface any autosaved draft for restoration (don't apply it
+  // automatically — let the user choose, so we never clobber a fresh session).
+  useEffect(() => {
+    if (draftHydrated.current) return;
+    draftHydrated.current = true;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const d = JSON.parse(raw) as DraftState;
+        if (hasEditableContent(d.puzzleTitle || "", d.clues || [], d.result || null)) {
+          setDraftToRestore(d);
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Continuously autosave the working puzzle to localStorage (debounced) so an
+  // accidental close never loses unsaved work.
+  useEffect(() => {
+    // While a restore banner is pending, only skip autosaving if the current
+    // state is still empty — that avoids clobbering the stored draft with a
+    // blank session. Once the user actually types, autosave resumes and
+    // protects the new work (the pending draft is still held in memory for the
+    // Restore button).
+    if (draftToRestore && !hasEditableContent(puzzleTitle, clues, result)) return;
+    // Skip the single re-run triggered by setCurrentPuzzleId right after a save.
+    if (justSavedRef.current) {
+      justSavedRef.current = false;
+      return;
+    }
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    if (!hasEditableContent(puzzleTitle, clues, result)) {
+      localStorage.removeItem(DRAFT_KEY);
+      setDirty(false);
+      return;
+    }
+    draftTimer.current = setTimeout(() => {
+      const draft: DraftState = {
+        savedAt: new Date().toISOString(),
+        puzzleTitle,
+        puzzleByline,
+        currentPuzzleId,
+        clues,
+        result,
+        mode,
+        manualGrid,
+        manualGridSize,
+        hiddenMessageMode,
+        hiddenMessageCells,
+        hiddenMessageText,
+      };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        setDirty(true);
+      } catch {}
+    }, 600);
+    return () => {
+      if (draftTimer.current) clearTimeout(draftTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    puzzleTitle,
+    puzzleByline,
+    currentPuzzleId,
+    clues,
+    result,
+    mode,
+    manualGrid,
+    manualGridSize,
+    hiddenMessageMode,
+    hiddenMessageCells,
+    hiddenMessageText,
+    draftToRestore,
+  ]);
+
+  // Warn before leaving the page with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  function restoreDraft() {
+    const d = draftToRestore;
+    if (!d) return;
+    setPuzzleTitle(d.puzzleTitle || "");
+    setPuzzleByline(d.puzzleByline || "");
+    setCurrentPuzzleId(d.currentPuzzleId ?? null);
+    setClues(d.clues && d.clues.length ? d.clues : [{ answer: "", clue: "" }]);
+    setResult(d.result || null);
+    setMode(d.mode === "manual" ? "manual" : "auto");
+    setManualGrid(d.manualGrid || []);
+    setManualGridSize(d.manualGridSize || { rows: 0, cols: 0 });
+    setHiddenMessageMode(!!d.hiddenMessageMode);
+    setHiddenMessageCells(d.hiddenMessageCells || []);
+    setHiddenMessageText(d.hiddenMessageText || "");
+    setDraftToRestore(null);
+  }
+
+  function discardDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftToRestore(null);
+    setDirty(false);
+  }
+
   function isHiddenMessageCell(r: number, c: number) {
     return hiddenMessageCells.some((cell) => cell.r === r && cell.c === c);
   }
@@ -325,9 +473,12 @@ export default function Home() {
   }
 
   async function doGenerate() {
-    const valid = clues.filter((c) => c.answer.trim() && c.clue.trim());
+    // Only answers are needed to lay out the grid — clue text can be filled in
+    // later. (Previously this required clue text too, so answer-only entries
+    // were silently dropped from the request.)
+    const valid = clues.filter((c) => c.answer.trim());
     if (valid.length < 2) {
-      setError("Please enter at least 2 complete clues (answer + clue text).");
+      setError("Please enter at least 2 answers to generate a grid.");
       return;
     }
     setLoading(true);
@@ -350,7 +501,10 @@ export default function Home() {
     }
   }
 
-  // Reorder clue entries to match puzzle order: Across by number, then Down by number
+  // Reorder clue entries to match puzzle order: Across by number, then Down by
+  // number — WITHOUT discarding any of the user's work. Placed words come first
+  // (in grid order); every other answer the user entered (unplaced words,
+  // answer-only entries, drafts) is kept at the end so nothing is ever lost.
   function reorderClues(data: CrosswordResult) {
     const across = data.placedWords
       .filter((w) => w.direction === "across")
@@ -359,18 +513,27 @@ export default function Home() {
       .filter((w) => w.direction === "down")
       .sort((a, b) => a.number - b.number);
     const ordered = [...across, ...down];
+    const placedAnswers = new Set(ordered.map((w) => w.answer.toUpperCase()));
+
+    // Preserve whatever clue text the user already wrote for each answer.
     const clueLookup = new Map<string, string>();
     for (const c of clues) {
-      if (c.answer.trim() && c.clue.trim()) {
+      if (c.answer.trim()) {
         clueLookup.set(c.answer.toUpperCase(), c.clue);
       }
     }
-    setClues(
-      ordered.map((w) => ({
-        answer: w.answer,
-        clue: clueLookup.get(w.answer) || w.clue || "",
-      }))
+
+    const placedEntries = ordered.map((w) => ({
+      answer: w.answer,
+      clue: clueLookup.get(w.answer.toUpperCase()) || w.clue || "",
+    }));
+
+    // Keep every entry the user typed that didn't get placed — never drop them.
+    const leftovers = clues.filter(
+      (c) => c.answer.trim() && !placedAnswers.has(c.answer.toUpperCase())
     );
+
+    setClues([...placedEntries, ...leftovers]);
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -582,7 +745,12 @@ export default function Home() {
   }
 
   async function savePuzzle() {
-    if (!result) return;
+    // Allow saving before a grid is generated — the answers/clues are worth
+    // protecting on their own. Only bail if there's genuinely nothing entered.
+    if (!hasEditableContent(puzzleTitle, clues, result)) {
+      setError("Nothing to save yet — enter a title or at least one answer first.");
+      return;
+    }
 
     const now = new Date();
     const ts =
@@ -628,6 +796,10 @@ export default function Home() {
         const saved = await res.json();
         if (saved.id) setCurrentPuzzleId(saved.id);
         setError(null);
+        // Now safely persisted — clear the local autosave draft.
+        justSavedRef.current = true;
+        localStorage.removeItem(DRAFT_KEY);
+        setDirty(false);
         // Refresh list
         try {
           const listRes = await fetch("/api/puzzles");
@@ -661,6 +833,9 @@ export default function Home() {
       ];
       setSavedPuzzles(updated);
       localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
+      // Saved to the local library — clear the transient autosave draft.
+      localStorage.removeItem(DRAFT_KEY);
+      setDirty(false);
     }
 
     setSaveTimestamp(ts);
@@ -1273,7 +1448,39 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen p-6 max-w-7xl mx-auto">
+    <div className="min-h-screen p-6 max-w-7xl xl:max-w-[90rem] 2xl:max-w-[105rem] mx-auto">
+      {/* Unsaved-work restore banner */}
+      {draftToRestore && (
+        <div
+          className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3"
+          style={{ fontFamily: FONT_BODY }}
+        >
+          <p className="text-sm text-amber-900">
+            <strong>Unsaved work found.</strong> You have a puzzle in progress
+            {draftToRestore.clues?.filter((c) => c.answer.trim()).length
+              ? ` (${draftToRestore.clues.filter((c) => c.answer.trim()).length} answer${
+                  draftToRestore.clues.filter((c) => c.answer.trim()).length === 1 ? "" : "s"
+                })`
+              : ""}
+            {" "}from a previous session. Restore it?
+          </p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={restoreDraft}
+              className="px-3 py-1.5 text-sm bg-amber-500 text-white rounded hover:bg-amber-600 transition font-medium"
+            >
+              Restore
+            </button>
+            <button
+              onClick={discardDraft}
+              className="px-3 py-1.5 text-sm bg-white border border-amber-300 text-amber-800 rounded hover:bg-amber-100 transition"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       {confirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
@@ -1349,7 +1556,7 @@ export default function Home() {
         </p>
       </header>
 
-      <div className={`grid grid-cols-1 ${hiddenMessageMode ? "" : "lg:grid-cols-2"} gap-8`}>
+      <div className={`grid grid-cols-1 gap-8 ${hiddenMessageMode ? "" : "lg:grid-cols-[minmax(360px,460px)_minmax(0,1fr)]"}`}>
         {/* Left: Input Panel — hidden in Hidden Message mode */}
         <div className={hiddenMessageMode ? "hidden" : ""}>
           {/* Puzzle title + New Puzzle */}
@@ -1577,6 +1784,23 @@ export default function Home() {
           >
             {loading ? "Generating..." : "Generate Crossword"}
           </button>
+
+          {/* Save is available at any time — even before generating a grid. */}
+          <button
+            onClick={savePuzzle}
+            className="mt-2 w-full py-2.5 border-2 border-black text-black font-semibold rounded-lg hover:bg-gray-100 transition text-base"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            {currentPuzzleId ? "Save Changes" : "Save Puzzle"}
+          </button>
+          <p
+            className="mt-1.5 text-xs text-center text-gray-400"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            {dirty
+              ? "Draft autosaved in this browser — click Save to keep it in your library."
+              : "You can Save anytime — even before generating the grid."}
+          </p>
 
           {error && (
             <p className="mt-3 text-red-600 text-sm font-medium">{error}</p>
@@ -1840,7 +2064,10 @@ export default function Home() {
                       style={{
                         gridTemplateColumns: `repeat(${manualGridSize.cols}, var(--cell-size))`,
                         gap: "1px",
-                        background: "#ccc",
+                        // Darker gridlines so every cell reads as its own square —
+                        // faint (#ccc) lines made adjacent/crossing letters blur
+                        // together into "groups".
+                        background: "#8a8a8a",
                       }}
                     >
                       {manualGrid.map((row, r) =>
@@ -1874,7 +2101,7 @@ export default function Home() {
                             >
                               {hasLetter && (
                                 <span
-                                  className="text-base font-medium select-none"
+                                  className="text-lg lg:text-xl font-medium select-none"
                                   style={{
                                     fontFamily: FONT_BODY,
                                     color: isLocked ? "#000" : "#2563eb",

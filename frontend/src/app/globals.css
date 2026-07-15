@@ -17,6 +17,19 @@
   }
 }
 
+/* Larger grid on desktop — scale cells up as more horizontal space is available.
+   Mobile (<=640px) stays at 28px; base desktop is 38px. */
+@media (min-width: 1024px) {
+  :root {
+    --cell-size: 46px;
+  }
+}
+@media (min-width: 1440px) {
+  :root {
+    --cell-size: 54px;
+  }
+}
+
 body {
   font-family: var(--font-body);
   background: #f7f7f5;
@@ -75,6 +88,24 @@ body {
 @media (max-width: 640px) {
   .crossword-cell .cell-letter {
     font-size: 14px;
+  }
+}
+
+/* Scale letters/numbers with the larger desktop cells */
+@media (min-width: 1024px) {
+  .crossword-cell .cell-letter {
+    font-size: 22px;
+  }
+  .crossword-cell .cell-number {
+    font-size: 10px;
+  }
+}
+@media (min-width: 1440px) {
+  .crossword-cell .cell-letter {
+    font-size: 26px;
+  }
+  .crossword-cell .cell-number {
+    font-size: 11px;
   }
 }
 
