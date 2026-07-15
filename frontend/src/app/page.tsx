@@ -1149,89 +1149,96 @@ export default function Home() {
       .sort((a, b) => a.number - b.number)
       .map((w) => ({ ...w, clue: clueFor(w) }));
 
-    const lineH = 10;
-
-    // Flowing clue renderer — draws clues across two zones:
-    // Zone 1: below the grid (x=margin, width=gridW)
-    // Zone 2: right column (x=rightColX, width=rightColW, from gridTopY down)
-    // Returns { x, y, colWidth } so the next section can continue in the flow.
-    type Zone = { x: number; y: number; w: number };
-    let currentZone: Zone = { x: margin, y: gridBottomY + 18, w: gridW };
-    let inRightCol = false;
-
-    function jumpToRightCol() {
-      currentZone = { x: rightColX, y: gridTopY + 5, w: rightColW };
-      inRightCol = true;
-    }
-
     // Use Montserrat if available, fall back to Helvetica
     const clueFont = pdf.getFontList()["Montserrat"] ? "Montserrat" : "helvetica";
 
-    function drawFlowingClueList(title: string, clueList: PlacedWord[]) {
-      let { x, y: cy, w: maxWidth } = currentZone;
+    // Flowing clue renderer across two zones on a SINGLE page:
+    //  Zone 1: below the grid (x=margin, width=gridW)
+    //  Zone 2: right column (x=rightColX, width=rightColW, from gridTopY down)
+    // Across then Down flow continuously. runFlow measures (dryRun) or draws at a
+    // given clue font size, returning whether everything fit on this one page.
+    function runFlow(fs: number, dryRun: boolean): boolean {
+      const lineH = fs * 1.18;
+      const numFs = Math.max(4, fs - 0.5);
+      let fitsOnePage = true;
+      let x = margin;
+      let cy = gridBottomY + 18;
+      let maxWidth = gridW;
+      let inRightCol = false;
+      const jumpToRightCol = () => {
+        x = rightColX;
+        cy = gridTopY + 5;
+        maxWidth = rightColW;
+        inRightCol = true;
+      };
 
-      pdf.setFont("times", "bold");
-      pdf.setFontSize(13);
-      pdf.text(title, x, cy);
-      cy += 4;
-      pdf.setLineWidth(0.5);
-      pdf.line(x, cy, x + maxWidth, cy);
-      cy += lineH;
-
-      // Pre-calculate the widest number+period width for tab alignment
-      pdf.setFont(clueFont, "bold");
-      pdf.setFontSize(8);
-      let maxNumW = 0;
-      for (const cl of clueList) {
-        const w = pdf.getTextWidth(`${cl.number}. `);
-        if (w > maxNumW) maxNumW = w;
-      }
-      const textIndent = maxNumW + 2; // small padding after widest number
-
-      for (const cl of clueList) {
-        pdf.setFont(clueFont, "normal");
-        pdf.setFontSize(8.5);
-        const lines = pdf.splitTextToSize(cl.clue || "(no clue)", maxWidth - textIndent);
-        const needed = lines.length * lineH;
-
-        // If this clue would overflow and we haven't moved to right col yet, jump there
-        if (cy + needed > bottomLimit && !inRightCol) {
-          jumpToRightCol();
-          x = currentZone.x;
-          cy = currentZone.y;
-          maxWidth = currentZone.w;
+      function drawList(title: string, clueList: PlacedWord[]) {
+        if (!dryRun) {
+          pdf.setFont("times", "bold");
+          pdf.setFontSize(13);
+          pdf.text(title, x, cy);
         }
+        cy += 4;
+        if (!dryRun) {
+          pdf.setLineWidth(0.5);
+          pdf.line(x, cy, x + maxWidth, cy);
+        }
+        cy += lineH;
 
         pdf.setFont(clueFont, "bold");
-        pdf.setFontSize(8);
-        pdf.text(`${cl.number}.`, x, cy);
-        pdf.setFont(clueFont, "normal");
-        pdf.setFontSize(8.5);
-        for (let l = 0; l < lines.length; l++) {
-          if (cy > bottomLimit) {
-            if (!inRightCol) {
-              jumpToRightCol();
-              x = currentZone.x;
-              cy = currentZone.y;
-              maxWidth = currentZone.w;
-            } else {
-              pdf.addPage();
-              cy = margin;
-            }
+        pdf.setFontSize(numFs);
+        let maxNumW = 0;
+        for (const cl of clueList) {
+          const w = pdf.getTextWidth(`${cl.number}. `);
+          if (w > maxNumW) maxNumW = w;
+        }
+        const textIndent = maxNumW + 2;
+
+        for (const cl of clueList) {
+          pdf.setFont(clueFont, "normal");
+          pdf.setFontSize(fs);
+          const lines = pdf.splitTextToSize(cl.clue || "(no clue)", maxWidth - textIndent);
+          const needed = lines.length * lineH;
+          if (cy + needed > bottomLimit && !inRightCol) jumpToRightCol();
+
+          if (!dryRun) {
+            pdf.setFont(clueFont, "bold");
+            pdf.setFontSize(numFs);
+            pdf.text(`${cl.number}.`, x, cy);
+            pdf.setFont(clueFont, "normal");
+            pdf.setFontSize(fs);
           }
-          pdf.text(lines[l], x + textIndent, cy);
-          cy += lineH;
+          for (let l = 0; l < lines.length; l++) {
+            if (cy > bottomLimit) {
+              if (!inRightCol) {
+                jumpToRightCol();
+              } else {
+                fitsOnePage = false;
+                if (!dryRun) {
+                  pdf.addPage();
+                  cy = margin;
+                }
+              }
+            }
+            if (!dryRun) pdf.text(lines[l], x + textIndent, cy);
+            cy += lineH;
+          }
         }
       }
 
-      currentZone = { x, y: cy, w: maxWidth };
+      drawList("Across", acr);
+      cy += 6; // small gap before Down heading
+      drawList("Down", dwn);
+      return fitsOnePage;
     }
 
-    // Across first, then Down continues in the same flow
-    drawFlowingClueList("Across", acr);
-    // Add a small gap before Down heading
-    currentZone.y += 6;
-    drawFlowingClueList("Down", dwn);
+    // Shrink the clue font from the ideal size until everything fits one page.
+    let clueFS = 8.5;
+    while (clueFS > 4.5) {
+      if (runFlow(clueFS, true)) break;
+      clueFS = Math.round((clueFS - 0.25) * 100) / 100;
+    }
+    runFlow(clueFS, false);
 
     return pdf;
   }
@@ -1268,10 +1275,10 @@ export default function Home() {
   async function exportAnswerKey() {
     if (!result) return;
     const pdf = await buildPDF(true);
-    pdf.save(`Answer Key - ${puzzleTitle || "crossword"}.pdf`);
+    pdf.save(`Compact Answer Key - ${puzzleTitle || "crossword"}.pdf`);
   }
 
-  async function exportLarge() {
+  async function exportLarge(showAnswers = false) {
     if (!result) return;
     const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
     const pw = 612;
@@ -1356,6 +1363,14 @@ export default function Home() {
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(Math.max(5, largeCellSize * 0.12));
             pdf.text(String(num), cx + 1.5, cy + Math.max(5, largeCellSize * 0.14));
+          }
+          // Answer key: draw the letter centered in the cell
+          if (showAnswers && cell) {
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(largeCellSize * 0.55);
+            pdf.text(String(cell), cx + largeCellSize / 2, cy + largeCellSize * 0.72, {
+              align: "center",
+            });
           }
           // Hidden message circle
           if (cell !== null && isHiddenMessageCell(r, c)) {
@@ -1496,7 +1511,9 @@ export default function Home() {
     drawClueColumn("Across", acr, margin);
     drawClueColumn("Down", dwn, margin + colWidth + colGap);
 
-    pdf.save(`Large Crossword - ${puzzleTitle || "crossword"}.pdf`);
+    pdf.save(
+      `Large ${showAnswers ? "Answer Key" : "Crossword"} - ${puzzleTitle || "crossword"}.pdf`
+    );
   }
 
   const acrossClues = (result?.placedWords || [])
@@ -2038,15 +2055,24 @@ export default function Home() {
                 >
                   Export / Share PDF
                 </button>
+                <div className="flex-1 flex flex-col gap-1">
+                  <button
+                    onClick={() => exportLarge(true)}
+                    className="py-1 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
+                    Export Large Answer Key
+                  </button>
+                  <button
+                    onClick={exportAnswerKey}
+                    className="py-1 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
+                    Export Compact Answer Key
+                  </button>
+                </div>
                 <button
-                  onClick={exportAnswerKey}
-                  className="flex-1 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
-                  style={{ fontFamily: FONT_BODY }}
-                >
-                  Export Answer Key
-                </button>
-                <button
-                  onClick={exportLarge}
+                  onClick={() => exportLarge()}
                   className="flex-1 py-2 text-sm text-white rounded-lg transition font-medium"
                   style={{ fontFamily: FONT_BODY, background: "#e88a1a" }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "#d07a15")}
