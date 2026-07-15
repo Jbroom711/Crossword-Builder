@@ -2042,41 +2042,47 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="mt-3 flex gap-3">
-                <button
-                  onClick={exportPDF}
-                  className="flex-1 py-2 text-sm text-white rounded-lg transition font-medium"
-                  style={{ fontFamily: FONT_BODY, background: "#56ca23" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#4ab51f")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "#56ca23")}
+              <div className="mt-3">
+                <p
+                  className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5"
+                  style={{ fontFamily: FONT_BODY }}
                 >
-                  Export / Share PDF
-                </button>
-                <div className="flex-1 flex flex-col gap-1">
+                  Export PDF&apos;s:
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={exportPDF}
+                    className="py-2 text-sm text-white rounded-lg transition font-medium"
+                    style={{ fontFamily: FONT_BODY, background: "#56ca23" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#4ab51f")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#56ca23")}
+                  >
+                    Compact Puzzle
+                  </button>
                   <button
                     onClick={() => exportLarge(true)}
-                    className="py-1 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+                    className="py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
                     style={{ fontFamily: FONT_BODY }}
                   >
-                    Export Large Answer Key
+                    Large Answer Key
                   </button>
                   <button
                     onClick={exportAnswerKey}
-                    className="py-1 text-xs bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+                    className="py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition font-medium"
                     style={{ fontFamily: FONT_BODY }}
                   >
-                    Export Compact Answer Key
+                    Compact Answer Key
+                  </button>
+                  <button
+                    onClick={() => exportLarge()}
+                    className="py-2 text-sm text-white rounded-lg transition font-medium"
+                    style={{ fontFamily: FONT_BODY, background: "#e88a1a" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#d07a15")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#e88a1a")}
+                  >
+                    Large Puzzle (2 pages)
                   </button>
                 </div>
-                <button
-                  onClick={() => exportLarge()}
-                  className="flex-1 py-2 text-sm text-white rounded-lg transition font-medium"
-                  style={{ fontFamily: FONT_BODY, background: "#e88a1a" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#d07a15")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "#e88a1a")}
-                >
-                  Export Large PDF<br />(2 pages)
-                </button>
               </div>
               {saveTimestamp && (
                 <p className="mt-1.5 text-xs text-gray-400" style={{ fontFamily: FONT_BODY }}>
