@@ -697,6 +697,18 @@ export default function Home() {
     setResult({ ...result, placedWords: updatedWords });
   }
 
+  // Resolve a placed word's clue from the live clues array (the input panel),
+  // falling back to the clue stored on the word. This keeps the on-screen and
+  // exported clue lists in sync with edits automatically — without this, a clue
+  // typed after generating shows "no clue" until "Sync Clues" is clicked.
+  function clueFor(word: PlacedWord): string {
+    const answer = word.answer.toUpperCase();
+    for (const c of clues) {
+      if (c.answer.trim().toUpperCase() === answer && c.clue.trim()) return c.clue;
+    }
+    return word.clue || "";
+  }
+
   // looking up clue text from both the existing result and the clues list.
   function captureManualWords() {
     if (!result) return;
@@ -1130,10 +1142,12 @@ export default function Home() {
 
     const acr = result.placedWords
       .filter((w) => w.direction === "across")
-      .sort((a, b) => a.number - b.number);
+      .sort((a, b) => a.number - b.number)
+      .map((w) => ({ ...w, clue: clueFor(w) }));
     const dwn = result.placedWords
       .filter((w) => w.direction === "down")
-      .sort((a, b) => a.number - b.number);
+      .sort((a, b) => a.number - b.number)
+      .map((w) => ({ ...w, clue: clueFor(w) }));
 
     const lineH = 10;
 
@@ -1389,10 +1403,12 @@ export default function Home() {
 
     const acr = result.placedWords
       .filter((w) => w.direction === "across")
-      .sort((a, b) => a.number - b.number);
+      .sort((a, b) => a.number - b.number)
+      .map((w) => ({ ...w, clue: clueFor(w) }));
     const dwn = result.placedWords
       .filter((w) => w.direction === "down")
-      .sort((a, b) => a.number - b.number);
+      .sort((a, b) => a.number - b.number)
+      .map((w) => ({ ...w, clue: clueFor(w) }));
 
     const colGap = 16;
     const colWidth = (usable - colGap) / 2;
@@ -1485,10 +1501,12 @@ export default function Home() {
 
   const acrossClues = (result?.placedWords || [])
     .filter((w) => w.direction === "across")
-    .sort((a, b) => a.number - b.number);
+    .sort((a, b) => a.number - b.number)
+    .map((w) => ({ ...w, clue: clueFor(w) }));
   const downClues = (result?.placedWords || [])
     .filter((w) => w.direction === "down")
-    .sort((a, b) => a.number - b.number);
+    .sort((a, b) => a.number - b.number)
+    .map((w) => ({ ...w, clue: clueFor(w) }));
 
   // Total number of clues in the puzzle (entries that have an answer).
   const clueCount = clues.filter((c) => c.answer.trim()).length;
