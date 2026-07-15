@@ -255,8 +255,14 @@ export default function Home() {
   const [draftToRestore, setDraftToRestore] = useState<DraftState | null>(null);
   const [dirty, setDirty] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const justSavedRef = useRef(false);
   const draftHydrated = useRef(false);
+  // Serialized snapshot of the currently saved/loaded puzzle. A draft is only
+  // kept when the working content differs from this baseline (i.e. there are
+  // genuinely unsaved changes) — so an already-saved puzzle never nags "restore?".
+  const savedContentRef = useRef<string>("");
+  // Set right after a load/save so the next autosave pass adopts the settled
+  // state as the new baseline.
+  const pendingBaselineRef = useRef(false);
 
   // True when the user has entered anything worth protecting.
   function hasEditableContent(
@@ -296,13 +302,37 @@ export default function Home() {
     // protects the new work (the pending draft is still held in memory for the
     // Restore button).
     if (draftToRestore && !hasEditableContent(puzzleTitle, clues, result)) return;
-    // Skip the single re-run triggered by setCurrentPuzzleId right after a save.
-    if (justSavedRef.current) {
-      justSavedRef.current = false;
+
+    const currentContent = JSON.stringify([
+      puzzleTitle,
+      puzzleByline,
+      clues,
+      result,
+      manualGrid,
+      manualGridSize,
+      hiddenMessageCells,
+      hiddenMessageText,
+    ]);
+
+    // Just loaded or saved a puzzle: adopt the settled state as the saved
+    // baseline and drop any draft — there are no unsaved changes yet.
+    if (pendingBaselineRef.current) {
+      pendingBaselineRef.current = false;
+      savedContentRef.current = currentContent;
+      localStorage.removeItem(DRAFT_KEY);
+      setDirty(false);
       return;
     }
+
     if (draftTimer.current) clearTimeout(draftTimer.current);
-    if (!hasEditableContent(puzzleTitle, clues, result)) {
+
+    // Nothing entered, OR content identical to the saved/loaded puzzle → no
+    // unsaved work, so keep no draft (this is what stops the "restore?" banner
+    // from appearing for a puzzle that's already saved).
+    if (
+      !hasEditableContent(puzzleTitle, clues, result) ||
+      currentContent === savedContentRef.current
+    ) {
       localStorage.removeItem(DRAFT_KEY);
       setDirty(false);
       return;
@@ -372,6 +402,10 @@ export default function Home() {
     setHiddenMessageCells(d.hiddenMessageCells || []);
     setHiddenMessageText(d.hiddenMessageText || "");
     setDraftToRestore(null);
+    // If the restored work belongs to a saved puzzle, treat it as the baseline
+    // so it won't keep re-prompting (it's recoverable from Saved anyway).
+    // Genuinely-unsaved new work keeps its draft so it survives future reloads.
+    if (d.currentPuzzleId) pendingBaselineRef.current = true;
   }
 
   function discardDraft() {
@@ -848,8 +882,8 @@ export default function Home() {
         const saved = await res.json();
         if (saved.id) setCurrentPuzzleId(saved.id);
         setError(null);
-        // Now safely persisted — clear the local autosave draft.
-        justSavedRef.current = true;
+        // Now safely persisted — this becomes the saved baseline; drop the draft.
+        pendingBaselineRef.current = true;
         localStorage.removeItem(DRAFT_KEY);
         setDirty(false);
         // Refresh list
@@ -885,7 +919,8 @@ export default function Home() {
       ];
       setSavedPuzzles(updated);
       localStorage.setItem("crossword_puzzles", JSON.stringify(updated));
-      // Saved to the local library — clear the transient autosave draft.
+      // Saved to the local library — this becomes the baseline; drop the draft.
+      pendingBaselineRef.current = true;
       localStorage.removeItem(DRAFT_KEY);
       setDirty(false);
     }
@@ -913,6 +948,8 @@ export default function Home() {
         }
         setHiddenMessageCells(full.hidden_message_cells || []);
         setHiddenMessageText(full.hidden_message_text || "");
+        // This freshly-loaded puzzle is the saved baseline — no unsaved changes.
+        pendingBaselineRef.current = true;
       } catch {
         setError("Failed to load puzzle");
       }
@@ -929,7 +966,10 @@ export default function Home() {
       } else if (puzzle.result) {
         buildManualGrid(puzzle.result);
       }
+      pendingBaselineRef.current = true;
     }
+    // Dismiss any pending restore banner — the user chose a specific puzzle.
+    setDraftToRestore(null);
     setShowSaved(false);
   }
 
@@ -1709,6 +1749,8 @@ export default function Home() {
                         setHiddenMessageText("");
                         setError(null);
                         setSaveTimestamp(null);
+                        pendingBaselineRef.current = true;
+                        setDraftToRestore(null);
                       },
                     });
                   } else {
