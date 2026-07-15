@@ -62,6 +62,23 @@ interface DraftState {
 
 const DRAFT_KEY = "crossword_draft";
 
+// User-controlled grid zoom (multiplies the responsive base cell size).
+const GRID_ZOOM_KEY = "crossword_grid_zoom";
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2.5;
+const ZOOM_STEP = 0.15;
+function clampZoom(z: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+}
+// Responsive base cell size by viewport width — MUST match the media-query
+// breakpoints in globals.css.
+function baseCellSize(width: number): number {
+  if (width <= 640) return 28;
+  if (width >= 1440) return 54;
+  if (width >= 1024) return 46;
+  return 38;
+}
+
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-US", {
     weekday: "long",
@@ -210,6 +227,29 @@ export default function Home() {
   const [hiddenMessageMode, setHiddenMessageMode] = useState(false);
   const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
   const [hiddenMessageText, setHiddenMessageText] = useState("");
+
+  // User-controlled grid zoom (display only — does not affect the clue column
+  // or PDF export). cellPx is the resolved pixel size (responsive base x zoom)
+  // used LITERALLY in the grid templates — a CSS var inside repeat() doesn't
+  // reliably resolve, which produced uneven columns.
+  const [gridZoom, setGridZoom] = useState(1);
+  const [cellPx, setCellPx] = useState(38);
+  useEffect(() => {
+    const saved = parseFloat(localStorage.getItem(GRID_ZOOM_KEY) || "");
+    if (!Number.isNaN(saved) && saved > 0) setGridZoom(clampZoom(saved));
+  }, []);
+  useEffect(() => {
+    localStorage.setItem(GRID_ZOOM_KEY, String(gridZoom));
+    function applyCellSize() {
+      const px = baseCellSize(window.innerWidth) * gridZoom;
+      setCellPx(px);
+      // Also expose it as a CSS var for cell widths / font scaling.
+      document.documentElement.style.setProperty("--cell-size", `${px}px`);
+    }
+    applyCellSize();
+    window.addEventListener("resize", applyCellSize);
+    return () => window.removeEventListener("resize", applyCellSize);
+  }, [gridZoom]);
 
   // Autosave / unsaved-work protection state
   const [draftToRestore, setDraftToRestore] = useState<DraftState | null>(null);
@@ -1980,6 +2020,45 @@ export default function Home() {
         <div>
           {result ? (
             <div>
+              {/* Grid size control — scales only the grid, not the clue column */}
+              <div
+                className="flex items-center gap-3 mb-4 flex-wrap"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Grid size
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setGridZoom((z) => clampZoom(z - ZOOM_STEP))}
+                    disabled={gridZoom <= ZOOM_MIN}
+                    aria-label="Shrink grid"
+                    className="w-8 h-8 flex items-center justify-center text-lg font-bold border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    &minus;
+                  </button>
+                  <span className="text-sm tabular-nums w-12 text-center text-gray-600">
+                    {Math.round(gridZoom * 100)}%
+                  </span>
+                  <button
+                    onClick={() => setGridZoom((z) => clampZoom(z + ZOOM_STEP))}
+                    disabled={gridZoom >= ZOOM_MAX}
+                    aria-label="Enlarge grid"
+                    className="w-8 h-8 flex items-center justify-center text-lg font-bold border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                  >
+                    +
+                  </button>
+                </div>
+                {gridZoom !== 1 && (
+                  <button
+                    onClick={() => setGridZoom(1)}
+                    className="text-xs text-blue-600 hover:text-blue-800 transition font-medium"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
               {/* Hidden Message controls — shown at top of grid when active */}
               {hiddenMessageMode && (
                 <div className="mb-4 p-4 border-2 border-purple-300 rounded-lg bg-purple-50">
@@ -2062,7 +2141,7 @@ export default function Home() {
                     <div
                       className="inline-grid border-2 border-black"
                       style={{
-                        gridTemplateColumns: `repeat(${manualGridSize.cols}, var(--cell-size))`,
+                        gridTemplateColumns: `repeat(${manualGridSize.cols}, ${cellPx}px)`,
                         gap: "1px",
                         // Darker gridlines so every cell reads as its own square —
                         // faint (#ccc) lines made adjacent/crossing letters blur
@@ -2201,7 +2280,7 @@ export default function Home() {
                       <div
                         className="crossword-grid"
                         style={{
-                          gridTemplateColumns: `repeat(${result.size.cols}, var(--cell-size))`,
+                          gridTemplateColumns: `repeat(${result.size.cols}, ${cellPx}px)`,
                         }}
                       >
                         {(result.grid || []).map((row, r) =>

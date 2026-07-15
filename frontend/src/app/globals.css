@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 :root {
+  /* Responsive default cell size. At runtime, JS overrides --cell-size with a
+     concrete pixel value (responsive base x user zoom) — kept as a plain length
+     so the grid's repeat(cols, var(--cell-size)) stays perfectly uniform.
+     Only the grid uses --cell-size, so zoom never affects the clue column. */
   --cell-size: 38px;
   --border-color: #000;
   --bg-filled: #fff;
@@ -11,14 +15,14 @@
   --font-body: "Libre Franklin", system-ui, sans-serif;
 }
 
+/* Responsive defaults used before JS runs (SSR / first paint). At runtime JS
+   recomputes the base from the viewport, applies the zoom factor, and sets
+   --cell-size to a concrete pixel value. */
 @media (max-width: 640px) {
   :root {
     --cell-size: 28px;
   }
 }
-
-/* Larger grid on desktop — scale cells up as more horizontal space is available.
-   Mobile (<=640px) stays at 28px; base desktop is 38px. */
 @media (min-width: 1024px) {
   :root {
     --cell-size: 46px;
