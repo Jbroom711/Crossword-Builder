@@ -90,9 +90,9 @@ function refDir(token: string): "across" | "down" {
 
 // Re-point {N-dir} references so they follow their ANSWER across a renumber:
 // resolve N-dir -> answer via the OLD numbering, then rewrite to that answer's
-// number/direction in the NEW numbering. References that can't be resolved
-// (the target answer was removed or is no longer placed) are left exactly as
-// typed, so the author notices and can fix them.
+// number/direction in the NEW numbering. A reference that can't be resolved
+// (its answer was removed / is no longer placed, or it points to a slot that
+// doesn't exist) becomes {?} so the author can spot and fix it.
 function resyncClueRefs(
   clues: ClueEntry[],
   oldWords: PlacedWord[],
@@ -110,11 +110,11 @@ function resyncClueRefs(
   let anyChange = false;
   const out = clues.map((c) => {
     if (c.clue.indexOf("{") === -1) return c;
-    const next = c.clue.replace(CLUE_REF_RE, (whole, numStr, dirTok) => {
+    const next = c.clue.replace(CLUE_REF_RE, (_whole, numStr, dirTok) => {
       const answer = slotToAnswer.get(`${numStr}-${refDir(dirTok)}`);
-      if (!answer) return whole; // couldn't resolve in old numbering
+      if (!answer) return "{?}"; // no such slot in the old numbering
       const slot = answerToSlot.get(answer);
-      if (!slot) return whole; // answer no longer placed
+      if (!slot) return "{?}"; // the referenced answer is no longer placed
       return `{${slot.number}-${slot.direction}}`;
     });
     if (next !== c.clue) anyChange = true;
