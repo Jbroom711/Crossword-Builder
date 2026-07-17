@@ -79,6 +79,50 @@ function baseCellSize(width: number): number {
   return 38;
 }
 
+// A dynamic clue cross-reference, e.g. {11-down} or {3-across}. Lenient parse:
+// optional spaces, optional hyphen, full word or single letter, any case.
+const CLUE_REF_RE = /\{\s*(\d+)\s*-?\s*(across|down|a|d)\s*\}/gi;
+
+function refDir(token: string): "across" | "down" {
+  const s = token.toLowerCase();
+  return s === "a" || s === "across" ? "across" : "down";
+}
+
+// Re-point {N-dir} references so they follow their ANSWER across a renumber:
+// resolve N-dir -> answer via the OLD numbering, then rewrite to that answer's
+// number/direction in the NEW numbering. References that can't be resolved
+// (the target answer was removed or is no longer placed) are left exactly as
+// typed, so the author notices and can fix them.
+function resyncClueRefs(
+  clues: ClueEntry[],
+  oldWords: PlacedWord[],
+  newWords: PlacedWord[]
+): ClueEntry[] {
+  if (oldWords.length === 0 || newWords.length === 0) return clues;
+  const slotToAnswer = new Map<string, string>();
+  for (const w of oldWords) {
+    slotToAnswer.set(`${w.number}-${w.direction}`, w.answer.toUpperCase());
+  }
+  const answerToSlot = new Map<string, { number: number; direction: string }>();
+  for (const w of newWords) {
+    answerToSlot.set(w.answer.toUpperCase(), { number: w.number, direction: w.direction });
+  }
+  let anyChange = false;
+  const out = clues.map((c) => {
+    if (c.clue.indexOf("{") === -1) return c;
+    const next = c.clue.replace(CLUE_REF_RE, (whole, numStr, dirTok) => {
+      const answer = slotToAnswer.get(`${numStr}-${refDir(dirTok)}`);
+      if (!answer) return whole; // couldn't resolve in old numbering
+      const slot = answerToSlot.get(answer);
+      if (!slot) return whole; // answer no longer placed
+      return `{${slot.number}-${slot.direction}}`;
+    });
+    if (next !== c.clue) anyChange = true;
+    return next === c.clue ? c : { ...c, clue: next };
+  });
+  return anyChange ? out : clues;
+}
+
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-US", {
     weekday: "long",
@@ -592,9 +636,13 @@ export default function Home() {
     const ordered = [...across, ...down];
     const placedAnswers = new Set(ordered.map((w) => w.answer.toUpperCase()));
 
+    // Update any {N-dir} cross-references to follow their answers to the new
+    // numbering before we reshuffle the clue text.
+    const synced = resyncClueRefs(clues, result?.placedWords || [], data.placedWords);
+
     // Preserve whatever clue text the user already wrote for each answer.
     const clueLookup = new Map<string, string>();
-    for (const c of clues) {
+    for (const c of synced) {
       if (c.answer.trim()) {
         clueLookup.set(c.answer.toUpperCase(), c.clue);
       }
@@ -606,7 +654,7 @@ export default function Home() {
     }));
 
     // Keep every entry the user typed that didn't get placed — never drop them.
-    const leftovers = clues.filter(
+    const leftovers = synced.filter(
       (c) => c.answer.trim() && !placedAnswers.has(c.answer.toUpperCase())
     );
 
@@ -813,14 +861,20 @@ export default function Home() {
     setResult(updatedResult);
     buildManualGrid(updatedResult);
 
+    // Re-point {N-dir} cross-references to follow their answers to the new
+    // numbering produced by the capture.
+    const synced = resyncClueRefs(clues, result.placedWords, numberedWords);
+
     // Add any truly new words (no clue text found) to the clue list
     const existingAnswers = new Set(clues.map((c) => c.answer.toUpperCase()));
     const newClueEntries: ClueEntry[] = allDetected
       .filter((w) => !existingAnswers.has(w.answer))
       .map((w) => ({ answer: w.answer, clue: "" }));
     if (newClueEntries.length > 0) {
-      const existingClues = clues.filter((c) => c.answer.trim());
+      const existingClues = synced.filter((c) => c.answer.trim());
       setClues([...existingClues, ...newClueEntries]);
+    } else if (synced !== clues) {
+      setClues(synced);
     }
   }
 
