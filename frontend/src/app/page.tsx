@@ -673,15 +673,29 @@ export default function Home() {
         method: "POST",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        // Prefer the server's specific message (e.g. bad columns).
+        let msg = "Upload failed. Expected a CSV with 'answer' and 'clue' columns.";
+        try {
+          const j = await res.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        throw new Error(msg);
+      }
       const data: CrosswordResult = await res.json();
       setResult(data);
       reorderClues(data);
       buildManualGrid(data);
-    } catch (e: any) {
-      setError(e.message || "Something went wrong");
+    } catch (err: any) {
+      setError(
+        err?.message === "Failed to fetch"
+          ? "Couldn't reach the puzzle server. It may be waking up — wait a few seconds and try again."
+          : err?.message || "Something went wrong with the upload."
+      );
     } finally {
       setLoading(false);
+      // Allow re-selecting the same file after a fix.
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
