@@ -558,7 +558,11 @@ export default function Home() {
   }
 
   const answerRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const clueRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  // Tracks the last cell double-clicked in manual mode, to alternate between the
+  // across and down clue when a cell starts both.
+  const lastJumpRef = useRef<{ r: number; c: number; dir: "across" | "down" } | null>(null);
 
   useEffect(() => {
     if (focusIndex !== null && answerRefs.current[focusIndex]) {
@@ -724,6 +728,68 @@ export default function Home() {
     } else {
       setSelectedCell({ r, c });
     }
+  }
+
+  // If (r,c) is the FIRST letter of a word in the manual grid in the given
+  // direction, return that word's answer text; otherwise null.
+  function manualWordStartingAt(r: number, c: number, dir: "across" | "down"): string | null {
+    const g = manualGrid;
+    if (!g[r]?.[c]) return null;
+    if (dir === "across") {
+      const startsHere = c === 0 || !g[r][c - 1];
+      const hasNext = !!g[r][c + 1];
+      if (!startsHere || !hasNext) return null;
+      let word = "";
+      for (let cc = c; g[r]?.[cc]; cc++) word += g[r][cc];
+      return word;
+    }
+    const startsHere = r === 0 || !g[r - 1]?.[c];
+    const hasNext = !!g[r + 1]?.[c];
+    if (!startsHere || !hasNext) return null;
+    let word = "";
+    for (let rr = r; g[rr]?.[c]; rr++) word += g[rr][c];
+    return word;
+  }
+
+  // Double-click the first letter of an answer in the manual grid to jump the
+  // clue list to that answer. If the cell starts both an across and a down word,
+  // jump to Across first, then Down on a repeat double-click of the same cell.
+  function jumpToClue(answer: string) {
+    const idx = clues.findIndex((cl) => cl.answer.trim().toUpperCase() === answer.toUpperCase());
+    if (idx < 0) return;
+    requestAnimationFrame(() => {
+      const el = clueRefs.current[idx] || answerRefs.current[idx];
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        el.focus();
+      }
+    });
+  }
+
+  function handleManualDoubleClick(r: number, c: number) {
+    const across = manualWordStartingAt(r, c, "across");
+    const down = manualWordStartingAt(r, c, "down");
+    let answer: string | null = null;
+    let dir: "across" | "down" | null = null;
+    if (across && down) {
+      const last = lastJumpRef.current;
+      if (last && last.r === r && last.c === c && last.dir === "across") {
+        answer = down;
+        dir = "down";
+      } else {
+        answer = across;
+        dir = "across";
+      }
+    } else if (across) {
+      answer = across;
+      dir = "across";
+    } else if (down) {
+      answer = down;
+      dir = "down";
+    }
+    if (!answer || !dir) return;
+    lastJumpRef.current = { r, c, dir };
+    jumpToClue(answer);
   }
 
   const handleManualKeyDown = useCallback(
@@ -1992,15 +2058,18 @@ export default function Home() {
                   className="w-32 shrink-0 px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black uppercase"
                   style={{
                     fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif",
-                    // Answers still needing a clue show in blue; revert to black
-                    // once a clue is written, to make gaps easy to spot.
+                    // Answers still needing a clue show in blue on a light-yellow
+                    // fill; revert to normal (black, no fill) once a clue exists.
                     color:
                       clue.answer.trim() && !clue.clue.trim() ? "#2563eb" : undefined,
                     fontWeight:
                       clue.answer.trim() && !clue.clue.trim() ? 600 : undefined,
+                    backgroundColor:
+                      clue.answer.trim() && !clue.clue.trim() ? "#fef9c3" : undefined,
                   }}
                 />
                 <input
+                  ref={(el) => { clueRefs.current[i] = el; }}
                   type="text"
                   placeholder="Clue text..."
                   value={clue.clue}
@@ -2401,6 +2470,9 @@ export default function Home() {
                                   handleCellClick(r, c);
                                   manualGridRef.current?.focus();
                                 }
+                              }}
+                              onDoubleClick={() => {
+                                if (!hiddenMessageMode && hasLetter) handleManualDoubleClick(r, c);
                               }}
                               className="relative flex items-center justify-center cursor-pointer"
                               style={{
