@@ -2429,6 +2429,16 @@ export default function Home() {
                     </p>
                   </div>
 
+                  <div className="flex justify-end mb-2">
+                    <button
+                      onClick={savePuzzle}
+                      className="px-5 py-1.5 text-sm bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition"
+                      style={{ fontFamily: FONT_BODY }}
+                    >
+                      Save
+                    </button>
+                  </div>
+
                   {hiddenMessageCells.length > 0 && (
                     <p
                       className="text-xs text-gray-500 mb-2"
@@ -2583,6 +2593,16 @@ export default function Home() {
                       >
                         {puzzleDate} &middot; {clueCountLabel}
                       </p>
+                    </div>
+
+                    <div className="flex justify-end mb-2">
+                      <button
+                        onClick={savePuzzle}
+                        className="px-5 py-1.5 text-sm bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition"
+                        style={{ fontFamily: FONT_BODY }}
+                      >
+                        Save
+                      </button>
                     </div>
 
                     {hiddenMessageCells.length > 0 && (
