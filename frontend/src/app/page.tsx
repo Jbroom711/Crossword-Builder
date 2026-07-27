@@ -2067,6 +2067,12 @@ export default function Home() {
               const label = placed
                 ? `${placed.number}${placed.direction === "across" ? "A" : "D"}`
                 : `${i + 1}`;
+              const isHighlighted = !!(
+                placed &&
+                highlightRef &&
+                highlightRef.number === placed.number &&
+                highlightRef.direction === placed.direction
+              );
               return (
               <div
                 key={i}
@@ -2108,8 +2114,13 @@ export default function Home() {
                       clue.answer.trim() && !clue.clue.trim() ? "#2563eb" : undefined,
                     fontWeight:
                       clue.answer.trim() && !clue.clue.trim() ? 600 : undefined,
-                    backgroundColor:
-                      clue.answer.trim() && !clue.clue.trim() ? "#fef9c3" : undefined,
+                    // Amber highlight (matches the grid) when this clue's number
+                    // is clicked; otherwise the unclued light-yellow, if applicable.
+                    backgroundColor: isHighlighted
+                      ? "#fde68a"
+                      : clue.answer.trim() && !clue.clue.trim()
+                      ? "#fef9c3"
+                      : undefined,
                   }}
                 />
                 <input
