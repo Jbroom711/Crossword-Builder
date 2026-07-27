@@ -275,6 +275,26 @@ export default function Home() {
   const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
   const [hiddenMessageText, setHiddenMessageText] = useState("");
 
+  // Clicking a clue number highlights that word's cells in the grid. Cleared by
+  // clicking anywhere that isn't a clue-number link.
+  const [highlightRef, setHighlightRef] = useState<{ number: number; direction: string } | null>(null);
+  const gridWrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    function clearOnOutsideClick(e: MouseEvent) {
+      const el = e.target as HTMLElement | null;
+      if (!el || !el.closest("[data-clue-ref]")) setHighlightRef(null);
+    }
+    document.addEventListener("click", clearOnOutsideClick);
+    return () => document.removeEventListener("click", clearOnOutsideClick);
+  }, []);
+
+  function jumpToClueInGrid(number: number, direction: string) {
+    setHighlightRef({ number, direction });
+    requestAnimationFrame(() => {
+      gridWrapRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
+
   // User-controlled grid zoom (display only — does not affect the clue column
   // or PDF export). cellPx is the resolved pixel size (responsive base x zoom)
   // used LITERALLY in the grid templates — a CSS var inside repeat() doesn't
@@ -1721,6 +1741,23 @@ export default function Home() {
   const clueCount = clues.filter((c) => c.answer.trim()).length;
   const clueCountLabel = `${clueCount} ${clueCount === 1 ? "clue" : "clues"}`;
 
+  // Cells of the currently-highlighted clue (in the coords of whichever grid is
+  // shown — the manual grid is padding-offset from the result coords).
+  const highlightCells = new Set<string>();
+  if (highlightRef && result) {
+    const w = result.placedWords.find(
+      (p) => p.number === highlightRef.number && p.direction === highlightRef.direction
+    );
+    if (w) {
+      const dr = w.direction === "down" ? 1 : 0;
+      const dc = w.direction === "across" ? 1 : 0;
+      const off = mode === "manual" ? MANUAL_PADDING : 0;
+      for (let i = 0; i < w.answer.length; i++) {
+        highlightCells.add(`${w.row + dr * i + off},${w.col + dc * i + off}`);
+      }
+    }
+  }
+
   // Check if any placed words are missing clue text that exists in the clue list
   const needsSync = (() => {
     if (!result?.placedWords) return false;
@@ -1747,12 +1784,6 @@ export default function Home() {
         lockedCells.add(`${w.row + MANUAL_PADDING + dr * i},${w.col + MANUAL_PADDING + dc * i}`);
       }
     }
-  }
-
-  // Highlight cells along the current typing direction from the selected cell
-  const highlightCells = new Set<string>();
-  if (selectedCell && mode === "manual") {
-    highlightCells.add(`${selectedCell.r},${selectedCell.c}`);
   }
 
   return (
@@ -2041,12 +2072,25 @@ export default function Home() {
                 key={i}
                 className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-3"
               >
-                <span
-                  className="text-xs text-gray-500 w-7 text-right shrink-0 font-semibold"
-                  style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
-                >
-                  {label}
-                </span>
+                {placed ? (
+                  <button
+                    type="button"
+                    data-clue-ref
+                    onClick={() => jumpToClueInGrid(placed.number, placed.direction)}
+                    title="Show this clue in the grid"
+                    className="text-xs w-7 text-right shrink-0 font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                    style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <span
+                    className="text-xs text-gray-500 w-7 text-right shrink-0 font-semibold"
+                    style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                  >
+                    {label}
+                  </span>
+                )}
                 <input
                   ref={(el) => { answerRefs.current[i] = el; }}
                   type="text"
@@ -2449,7 +2493,7 @@ export default function Home() {
                   )}
 
                   <div
-                    ref={manualGridRef}
+                    ref={(el) => { manualGridRef.current = el; gridWrapRef.current = el; }}
                     className="grid-scroll-container flex justify-start mb-6 outline-none"
                     tabIndex={0}
                     onKeyDown={handleManualKeyDown}
@@ -2490,6 +2534,8 @@ export default function Home() {
                                 height: "var(--cell-size)",
                                 background: isSelected
                                   ? "#b8d4f0"
+                                  : hasLetter && highlightCells.has(`${r},${c}`)
+                                  ? "#fde68a"
                                   : hasLetter
                                   ? "#fff"
                                   : "#f5f5f0",
@@ -2614,7 +2660,7 @@ export default function Home() {
                       </p>
                     )}
 
-                    <div className="grid-scroll-container flex justify-start mb-6">
+                    <div ref={gridWrapRef} className="grid-scroll-container flex justify-start mb-6">
                       <div
                         className="crossword-grid"
                         style={{
@@ -2629,7 +2675,13 @@ export default function Home() {
                               onClick={() => {
                                 if (hiddenMessageMode && cell !== null) toggleHiddenMessageCell(r, c);
                               }}
-                              style={{ cursor: hiddenMessageMode && cell !== null ? "pointer" : undefined }}
+                              style={{
+                                cursor: hiddenMessageMode && cell !== null ? "pointer" : undefined,
+                                background:
+                                  cell !== null && highlightCells.has(`${r},${c}`)
+                                    ? "#fde68a"
+                                    : undefined,
+                              }}
                             >
                               {cell !== null && result.numberGrid[r][c] > 0 && (
                                 <span className="cell-number">
