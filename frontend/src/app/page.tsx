@@ -1758,6 +1758,24 @@ export default function Home() {
     }
   }
 
+  // Tight bounding box of the filled cells in manual mode — drawn as a colored
+  // frame so the author sees exactly how much space the answers occupy.
+  let manualBBox: { minR: number; maxR: number; minC: number; maxC: number } | null = null;
+  if (mode === "manual" && manualGrid.length) {
+    let minR = Infinity, maxR = -1, minC = Infinity, maxC = -1;
+    for (let r = 0; r < manualGrid.length; r++) {
+      for (let c = 0; c < manualGrid[r].length; c++) {
+        if (manualGrid[r][c] !== null) {
+          if (r < minR) minR = r;
+          if (r > maxR) maxR = r;
+          if (c < minC) minC = c;
+          if (c > maxC) maxC = c;
+        }
+      }
+    }
+    if (maxR >= 0) manualBBox = { minR, maxR, minC, maxC };
+  }
+
   // Check if any placed words are missing clue text that exists in the clue list
   const needsSync = (() => {
     if (!result?.placedWords) return false;
@@ -2512,6 +2530,7 @@ export default function Home() {
                     <div
                       className="inline-grid border-2 border-black"
                       style={{
+                        position: "relative",
                         gridTemplateColumns: `repeat(${manualGridSize.cols}, ${cellPx}px)`,
                         gap: "1px",
                         // Darker gridlines so every cell reads as its own square —
@@ -2573,6 +2592,24 @@ export default function Home() {
                             </div>
                           );
                         })
+                      )}
+                      {/* Tight frame around the filled cells. Absolutely
+                          positioned (into its grid area) so it doesn't displace
+                          the auto-placed cells the way an in-flow grid item would. */}
+                      {manualBBox && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            gridRowStart: manualBBox.minR + 1,
+                            gridRowEnd: manualBBox.maxR + 2,
+                            gridColumnStart: manualBBox.minC + 1,
+                            gridColumnEnd: manualBBox.maxC + 2,
+                            border: "3px solid #9333ea",
+                            pointerEvents: "none",
+                            zIndex: 3,
+                          }}
+                        />
                       )}
                     </div>
                   </div>
