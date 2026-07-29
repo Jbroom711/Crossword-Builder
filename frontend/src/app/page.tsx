@@ -2502,7 +2502,14 @@ export default function Home() {
                     </p>
                   </div>
 
-                  <div className="flex justify-end mb-2">
+                  <div className="flex justify-end gap-2 mb-2">
+                    <button
+                      onClick={captureManualWords}
+                      className="px-5 py-1.5 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition"
+                      style={{ fontFamily: FONT_BODY }}
+                    >
+                      Capture new words from Grid
+                    </button>
                     <button
                       onClick={savePuzzle}
                       className="px-5 py-1.5 text-sm bg-black text-white font-semibold rounded-lg hover:bg-gray-800 transition"
