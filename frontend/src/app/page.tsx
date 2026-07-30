@@ -2102,7 +2102,11 @@ export default function Home() {
                     data-clue-ref
                     onClick={() => jumpToClueInGrid(placed.number, placed.direction)}
                     title="Show this clue in the grid"
-                    className="text-xs w-7 text-right shrink-0 font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                    className={`text-xs w-7 text-right shrink-0 font-semibold hover:underline cursor-pointer ${
+                      placed.direction === "down"
+                        ? "text-purple-600 hover:text-purple-800"
+                        : "text-blue-600 hover:text-blue-800"
+                    }`}
                     style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
                   >
                     {label}
