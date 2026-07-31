@@ -1637,7 +1637,7 @@ export default function Home() {
     function drawDirectionPage(title: string, clueList: PlacedWord[]) {
       pdf.addPage();
       let yy = drawHeader(margin + 16);
-      yy += 4;
+      yy += 4 + 16; // full blank line between the byline and the direction heading
       pdf.setFont("times", "bold");
       pdf.setFontSize(16);
       pdf.text(title, margin, yy);
@@ -1742,7 +1742,7 @@ export default function Home() {
     const colGap = 16;
     const colWidth = (usable - colGap) / 2;
 
-    y += 4; // tight gap: clues start just below the byline (keeps clue size)
+    y += 4 + 16; // full blank line between the byline and the Across/Down headings
     const cluesTop = y;
     const availH = bottomLimit - cluesTop;
     const TITLE_FS = 13;
