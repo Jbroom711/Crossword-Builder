@@ -237,6 +237,53 @@ function assignNumbers(
   return { words: numbered, numberGrid };
 }
 
+// Rebuild a CrosswordResult from a set of placed words: re-place them at their
+// existing coordinates, trim to the bounding box, and renumber. Returns null if
+// there are no words left. Used when a word is removed so the grid stays in
+// sync (dropping the removed word's now-orphaned cells).
+function buildResultFromPlacedWords(
+  words: PlacedWord[]
+): { result: CrosswordResult; numberedWords: PlacedWord[] } | null {
+  if (words.length === 0) return null;
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+  for (const w of words) {
+    const dr = w.direction === "down" ? 1 : 0;
+    const dc = w.direction === "across" ? 1 : 0;
+    for (let i = 0; i < w.answer.length; i++) {
+      const r = w.row + dr * i;
+      const c = w.col + dc * i;
+      if (r < minR) minR = r;
+      if (r > maxR) maxR = r;
+      if (c < minC) minC = c;
+      if (c > maxC) maxC = c;
+    }
+  }
+  const rows = maxR - minR + 1;
+  const cols = maxC - minC + 1;
+  const grid: (string | null)[][] = Array.from({ length: rows }, () =>
+    Array(cols).fill(null)
+  );
+  const shifted = words.map((w) => ({ ...w, row: w.row - minR, col: w.col - minC }));
+  for (const w of shifted) {
+    const dr = w.direction === "down" ? 1 : 0;
+    const dc = w.direction === "across" ? 1 : 0;
+    for (let i = 0; i < w.answer.length; i++) {
+      grid[w.row + dr * i][w.col + dc * i] = w.answer[i];
+    }
+  }
+  const { words: numberedWords, numberGrid } = assignNumbers(shifted, rows, cols);
+  return {
+    result: {
+      grid,
+      numberGrid,
+      size: { rows, cols },
+      placedWords: numberedWords,
+      unplacedWords: [],
+    },
+    numberedWords,
+  };
+}
+
 export default function Home() {
   const { isSignedIn, isLoaded } = useUser();
   const [clues, setClues] = useState<ClueEntry[]>([
@@ -598,7 +645,29 @@ export default function Home() {
 
   function removeClue(index: number) {
     if (clues.length <= 1) return;
-    setClues(clues.filter((_, i) => i !== index));
+    const removedAnswer = clues[index].answer.trim().toUpperCase();
+    let newClues = clues.filter((_, i) => i !== index);
+
+    // If that answer is currently placed in the grid, remove it from the layout
+    // too — otherwise its cells linger as orphaned boxes in Automatic mode.
+    if (result && removedAnswer) {
+      const remaining = result.placedWords.filter((w) => w.answer !== removedAnswer);
+      if (remaining.length !== result.placedWords.length) {
+        const rebuilt = buildResultFromPlacedWords(remaining);
+        if (rebuilt) {
+          setResult(rebuilt.result);
+          buildManualGrid(rebuilt.result);
+          // Follow {N-dir} cross-references through the renumbering.
+          newClues = resyncClueRefs(newClues, result.placedWords, rebuilt.numberedWords);
+        } else {
+          // Removed the last placed word — no grid left.
+          setResult(null);
+          setManualGrid([]);
+          setManualGridSize({ rows: 0, cols: 0 });
+        }
+      }
+    }
+    setClues(newClues);
   }
 
   async function handleGenerate() {
@@ -916,7 +985,14 @@ export default function Home() {
     // Detect ALL words in the manual grid (pass empty existing list so nothing is filtered)
     const allDetected = detectWords(manualGrid, manualGridSize.rows, manualGridSize.cols, []);
 
-    if (allDetected.length === 0) return;
+    if (allDetected.length === 0) {
+      // The grid was emptied — clear the layout so Automatic mode shows nothing
+      // rather than a stale puzzle.
+      setResult(null);
+      setManualGrid([]);
+      setManualGridSize({ rows: 0, cols: 0 });
+      return;
+    }
 
     // Assign clue text from lookup
     for (const w of allDetected) {
@@ -986,6 +1062,12 @@ export default function Home() {
       }
       setMode("manual");
     } else {
+      // Leaving manual mode: capture the grid so the Automatic layout reflects
+      // any edits (letters added or deleted) — otherwise the two views drift out
+      // of sync (e.g. deleted letters keep showing as boxes in Automatic mode).
+      if (mode === "manual" && result && manualGrid.length > 0) {
+        captureManualWords();
+      }
       setSelectedCell(null);
       setMode("auto");
     }
