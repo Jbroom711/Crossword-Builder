@@ -7,7 +7,7 @@ import jsPDF from "jspdf";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const FONT_HEADING = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Libre Franklin', system-ui, sans-serif";
-const MANUAL_PADDING = 5; // extra cells around the grid in manual mode
+const MANUAL_PADDING = 2; // extra cells around the grid in manual mode
 
 interface ClueEntry {
   answer: string;
