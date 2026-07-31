@@ -1622,6 +1622,12 @@ export default function Home() {
     pdf.text("A JSham Crossword Build", gridX + gridW, largeGridBottom + 6, { align: "right" });
     pdf.setTextColor(0);
 
+    // Answer key = the filled grid only, no clues.
+    if (showAnswers) {
+      pdf.save(`Large Answer Key - ${puzzleTitle || "crossword"}.pdf`);
+      return;
+    }
+
     const acr = result.placedWords
       .filter((w) => w.direction === "across")
       .sort((a, b) => a.number - b.number)
