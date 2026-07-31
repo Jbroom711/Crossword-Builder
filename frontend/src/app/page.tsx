@@ -1480,7 +1480,7 @@ export default function Home() {
     pdf.save(`Compact Answer Key - ${puzzleTitle || "crossword"}.pdf`);
   }
 
-  async function exportLarge(showAnswers = false) {
+  async function exportLarge(showAnswers = false, splitCluePages = false) {
     if (!result) return;
     const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
     const pw = 612;
@@ -1622,12 +1622,6 @@ export default function Home() {
     pdf.text("A JSham Crossword Build", gridX + gridW, largeGridBottom + 6, { align: "right" });
     pdf.setTextColor(0);
 
-    // === PAGE 2: Header + Two-column clues ===
-    pdf.addPage();
-    // Nudge only the title/byline down so the title clears the top edge, and let
-    // the clues start right below the byline (tight) so they keep their size.
-    y = drawHeader(margin + 16);
-
     const acr = result.placedWords
       .filter((w) => w.direction === "across")
       .sort((a, b) => a.number - b.number)
@@ -1636,6 +1630,114 @@ export default function Home() {
       .filter((w) => w.direction === "down")
       .sort((a, b) => a.number - b.number)
       .map((w) => ({ ...w, clue: clueFor(w) }));
+
+    // Split variant (3-page): the large grid, then Across on its own page and
+    // Down on its own page — two columns each, text sized as large as possible
+    // to fill the page so the clues are easy to read.
+    function drawDirectionPage(title: string, clueList: PlacedWord[]) {
+      pdf.addPage();
+      let yy = drawHeader(margin + 16);
+      yy += 4;
+      pdf.setFont("times", "bold");
+      pdf.setFontSize(16);
+      pdf.text(title, margin, yy);
+      yy += 6;
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, yy, margin + usable, yy);
+      yy += 8;
+      const dpCluesTop = yy;
+      const dpAvailH = bottomLimit - dpCluesTop;
+      const dpColGap = 18;
+      const dpColWidth = (usable - dpColGap) / 2;
+      const numFs = (fs: number) => Math.max(5, fs - 1);
+      const lineH = (fs: number) => fs * 1.2;
+
+      function indentFor(fs: number): number {
+        pdf.setFont(clueFont, "bold");
+        pdf.setFontSize(numFs(fs));
+        let maxNumW = 0;
+        for (const cl of clueList) {
+          const w = pdf.getTextWidth(`${cl.number}. `);
+          if (w > maxNumW) maxNumW = w;
+        }
+        return maxNumW + 2;
+      }
+
+      type Item = { cl: PlacedWord; lines: string[]; h: number };
+      type Built = {
+        cols: [Item[], Item[]];
+        indent: number;
+        lh: number;
+        fs: number;
+        fits: boolean;
+      };
+
+      // Lay the clues out at font size fs, split into two BALANCED columns (each
+      // roughly half the total height, keeping numeric order left-to-right).
+      function build(fs: number): Built {
+        const lh = lineH(fs);
+        const indent = indentFor(fs);
+        pdf.setFont(clueFont, "normal");
+        pdf.setFontSize(fs);
+        const items: Item[] = clueList.map((cl) => {
+          const lines = pdf.splitTextToSize(cl.clue || "(no clue)", dpColWidth - indent);
+          return { cl, lines, h: Math.max(1, lines.length) * lh };
+        });
+        const n = items.length;
+        const prefix = [0];
+        for (let i = 0; i < n; i++) prefix.push(prefix[i] + items[i].h);
+        const total = prefix[n];
+        // Split point that balances the two columns best.
+        let bestK = Math.ceil(n / 2);
+        let bestMax = Infinity;
+        for (let k = 1; k <= n; k++) {
+          const colMax = Math.max(prefix[k], total - prefix[k]);
+          if (colMax < bestMax) {
+            bestMax = colMax;
+            bestK = k;
+          }
+        }
+        const cols: [Item[], Item[]] = [items.slice(0, bestK), items.slice(bestK)];
+        // Fits if the taller column clears the page (a single clue can't be split).
+        const fits = n <= 1 || bestMax <= dpAvailH;
+        return { cols, indent, lh, fs, fits };
+      }
+
+      // Grow the text (capped for readability) to the largest size that still
+      // fits two balanced columns on the page.
+      let built = build(16);
+      for (let fs = 15.5; !built.fits && fs >= 6; fs -= 0.5) built = build(fs);
+
+      const xs = [margin, margin + dpColWidth + dpColGap];
+      for (let ci = 0; ci < 2; ci++) {
+        let top = dpCluesTop;
+        for (const item of built.cols[ci]) {
+          const baseline = top + built.fs;
+          pdf.setFont(clueFont, "bold");
+          pdf.setFontSize(numFs(built.fs));
+          pdf.text(`${item.cl.number}.`, xs[ci], baseline);
+          pdf.setFont(clueFont, "normal");
+          pdf.setFontSize(built.fs);
+          for (let l = 0; l < item.lines.length; l++) {
+            pdf.text(item.lines[l], xs[ci] + built.indent, baseline + l * built.lh);
+          }
+          top += item.h;
+        }
+      }
+    }
+
+    if (splitCluePages) {
+      drawDirectionPage("Across", acr);
+      drawDirectionPage("Down", dwn);
+      pdf.save(`Large Crossword + Large Clues - ${puzzleTitle || "crossword"}.pdf`);
+      return;
+    }
+
+    // === PAGE 2: Header + Two-column clues (Across + Down together) ===
+    pdf.addPage();
+    // Nudge only the title/byline down so the title clears the top edge, and let
+    // the clues start right below the byline (tight) so they keep their size.
+    y = drawHeader(margin + 16);
 
     const colGap = 16;
     const colWidth = (usable - colGap) / 2;
@@ -2342,7 +2444,7 @@ export default function Home() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#d07a15")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "#e88a1a")}
                   >
-                    Compact Puzzle
+                    Compact Puzzle (1 page)
                   </button>
                   <button
                     onClick={() => exportLarge(true)}
@@ -2359,6 +2461,15 @@ export default function Home() {
                     onMouseLeave={(e) => (e.currentTarget.style.background = "#56ca23")}
                   >
                     Large Puzzle (2 pages)
+                  </button>
+                  <button
+                    onClick={() => exportLarge(false, true)}
+                    className="col-span-2 py-2 text-sm text-white rounded-lg transition font-medium"
+                    style={{ fontFamily: FONT_BODY, background: "#9333ea" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#7e22ce")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "#9333ea")}
+                  >
+                    Large Puzzle &amp; Clues (3 pages) // Across &amp; Down full pages
                   </button>
                 </div>
               </div>
