@@ -5,6 +5,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Crossword Builder",
   description: "Build crossword puzzles with automatic grid layout",
+  // favicon.ico, icon.png and apple-icon.png in src/app/ are picked up
+  // automatically by Next.js and emitted as the right <link> tags.
+  appleWebApp: {
+    capable: true,
+    title: "Crossword",
+    statusBarStyle: "default",
+  },
 };
 
 export default function RootLayout({
