@@ -2035,6 +2035,35 @@ export default function Home() {
   const clueCount = clues.filter((c) => c.answer.trim()).length;
   const clueCountLabel = `${clueCount} ${clueCount === 1 ? "clue" : "clues"}`;
 
+  // Map each clue-list row to a DISTINCT placed word. For repeated answers
+  // (e.g. three ELs) the k-th clue row is paired with the k-th placement, so
+  // each row shows its own number instead of all sharing the first one.
+  const cluePlacement = new Map<number, PlacedWord>();
+  if (result?.placedWords) {
+    const byAnswer = new Map<string, PlacedWord[]>();
+    for (const w of [...result.placedWords].sort(
+      (a, b) =>
+        (a.direction === b.direction ? 0 : a.direction === "across" ? -1 : 1) ||
+        a.number - b.number
+    )) {
+      const a = w.answer.toUpperCase();
+      if (!byAnswer.has(a)) byAnswer.set(a, []);
+      byAnswer.get(a)!.push(w);
+    }
+    const used = new Map<string, number>();
+    clues.forEach((c, i) => {
+      const a = c.answer.trim().toUpperCase();
+      if (!a) return;
+      const list = byAnswer.get(a);
+      if (!list) return;
+      const k = used.get(a) || 0;
+      if (list[k]) {
+        cluePlacement.set(i, list[k]);
+        used.set(a, k + 1);
+      }
+    });
+  }
+
   // Cells of the currently-highlighted clue (in the coords of whichever grid is
   // shown — the manual grid is padding-offset from the result coords).
   const highlightCells = new Set<string>();
@@ -2360,8 +2389,8 @@ export default function Home() {
               const indices = clues.map((_, i) => i);
               if (result?.placedWords) {
                 indices.sort((a, b) => {
-                  const pa = result.placedWords.find((w) => w.answer === clues[a].answer.toUpperCase());
-                  const pb = result.placedWords.find((w) => w.answer === clues[b].answer.toUpperCase());
+                  const pa = cluePlacement.get(a);
+                  const pb = cluePlacement.get(b);
                   if (pa && !pb) return -1;
                   if (!pa && pb) return 1;
                   if (!pa && !pb) return a - b;
@@ -2373,9 +2402,7 @@ export default function Home() {
               return indices;
             })().map((i) => {
               const clue = clues[i];
-              const placed = result?.placedWords.find(
-                (w) => w.answer === clue.answer.toUpperCase()
-              );
+              const placed = cluePlacement.get(i);
               const label = placed
                 ? `${placed.number}${placed.direction === "across" ? "A" : "D"}`
                 : `${i + 1}`;
