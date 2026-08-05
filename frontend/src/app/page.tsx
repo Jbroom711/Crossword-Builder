@@ -754,12 +754,44 @@ export default function Home() {
     setClues([...placedEntries, ...leftovers]);
   }
 
+  // Load a full puzzle (title + clues + a pre-laid grid) exactly as given, so a
+  // hand-designed layout is preserved instead of being auto-generated. Used to
+  // import old crosswords built elsewhere. Save afterwards to keep it.
+  function importFullPuzzle(p: {
+    title?: string;
+    byline?: string;
+    clues?: ClueEntry[];
+    result: CrosswordResult;
+  }) {
+    setPuzzleTitle(p.title || "");
+    setPuzzleByline(p.byline || "");
+    setCurrentPuzzleId(null); // treat as a new puzzle; Save will insert it
+    setClues(p.clues && p.clues.length ? p.clues : [{ answer: "", clue: "" }]);
+    setResult(p.result);
+    buildManualGrid(p.result);
+    setMode("auto");
+    setSaveTimestamp(null);
+  }
+
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setLoading(true);
     setError(null);
     try {
+      // A "crossword-full-v1" JSON carries its own laid-out grid — import it
+      // directly (client-side) so the layout is preserved. Anything else is a
+      // clue list that the backend lays out automatically.
+      const text = await file.text();
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.format === "crossword-full-v1" && parsed.result) {
+          importFullPuzzle(parsed);
+          return;
+        }
+      } catch {
+        // not JSON (or not our format) — fall through to the backend upload
+      }
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch(`${API_URL}/api/upload`, {
@@ -961,8 +993,15 @@ export default function Home() {
   // typed after generating shows "no clue" until "Sync Clues" is clicked.
   function clueFor(word: PlacedWord): string {
     const answer = word.answer.toUpperCase();
-    for (const c of clues) {
-      if (c.answer.trim().toUpperCase() === answer && c.clue.trim()) return c.clue;
+    // When the same answer is placed more than once (e.g. two ALHAMBRAs with
+    // different clues), the clue list — which is keyed by answer — can't tell
+    // them apart, so trust the word's own clue snapshot for that position.
+    const placedTwice =
+      (result?.placedWords.filter((w) => w.answer.toUpperCase() === answer).length ?? 0) > 1;
+    if (!placedTwice) {
+      for (const c of clues) {
+        if (c.answer.trim().toUpperCase() === answer && c.clue.trim()) return c.clue;
+      }
     }
     return word.clue || "";
   }
