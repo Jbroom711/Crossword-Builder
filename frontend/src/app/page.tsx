@@ -546,13 +546,48 @@ export default function Home() {
     if (!isLoaded) return;
     if (isSignedIn) {
       (async () => {
-        // Check for localStorage puzzles to migrate to the cloud
+        // Fetch the cloud library first so migration can skip anything that
+        // already exists (avoids duplicate rows).
+        let cloud: SavedPuzzle[] = [];
+        try {
+          const res = await fetch("/api/puzzles");
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) cloud = data;
+          } else if (res.status === 401) {
+            setError(
+              "You appear to be signed in, but your session couldn't be verified. Try refreshing the page."
+            );
+            return;
+          } else {
+            setError(
+              "Couldn't load your saved puzzles (server error). Your puzzles are safe in your account — please try again shortly."
+            );
+            return;
+          }
+        } catch {
+          setError(
+            "Couldn't reach the server to load your saved puzzles. Check your connection and try again."
+          );
+          return;
+        }
+
+        // Migrate puzzles built while signed out — but ONLY real ones (a grid or
+        // at least one answered clue) that aren't already in the cloud. This
+        // prevents re-uploading metadata-only stubs (which created empty rows)
+        // and re-uploading puzzles that already exist (which created dupes).
         const raw = localStorage.getItem("crossword_puzzles");
         if (raw) {
           try {
             const localPuzzles = JSON.parse(raw) as SavedPuzzle[];
-            let allMigrated = true;
-            for (const p of localPuzzles) {
+            const cloudTitles = new Set(cloud.map((p) => p.title));
+            const hasContent = (p: SavedPuzzle) =>
+              !!p.result || (p.clues || []).some((c) => c.answer?.trim());
+            const toMigrate = localPuzzles.filter(
+              (p) => hasContent(p) && !cloudTitles.has(p.title)
+            );
+            let allOk = true;
+            for (const p of toMigrate) {
               try {
                 const res = await fetch("/api/puzzles", {
                   method: "POST",
@@ -567,45 +602,36 @@ export default function Home() {
                     manualGridSize: p.manualGridSize || null,
                   }),
                 });
-                if (!res.ok) allMigrated = false;
+                if (!res.ok) allOk = false;
               } catch {
-                allMigrated = false;
+                allOk = false;
               }
             }
-            // Only delete the local copy once EVERY puzzle is confirmed in the
-            // cloud. A silent failure here used to wipe localStorage anyway,
-            // permanently losing puzzles that never uploaded.
-            if (allMigrated) {
+            // Once every real puzzle is safely uploaded, the local copy has done
+            // its job — clear it so it can't migrate again. (Stubs/dupes were
+            // skipped, so keeping them around would only re-trigger this.)
+            if (allOk) {
               localStorage.removeItem("crossword_puzzles");
             } else {
               setError(
                 "Some puzzles couldn't be uploaded to your account and are still saved locally in this browser. Please try again."
               );
             }
+            // Re-fetch so the list includes anything just migrated.
+            if (toMigrate.length) {
+              try {
+                const res2 = await fetch("/api/puzzles");
+                if (res2.ok) {
+                  const d2 = await res2.json();
+                  if (Array.isArray(d2)) cloud = d2;
+                }
+              } catch {}
+            }
           } catch {
             // Malformed localStorage — leave it untouched rather than risk loss.
           }
         }
-        // Load from API
-        try {
-          const res = await fetch("/api/puzzles");
-          if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data)) setSavedPuzzles(data);
-          } else if (res.status === 401) {
-            setError(
-              "You appear to be signed in, but your session couldn't be verified. Try refreshing the page."
-            );
-          } else {
-            setError(
-              "Couldn't load your saved puzzles (server error). Your puzzles are safe in your account — please try again shortly."
-            );
-          }
-        } catch {
-          setError(
-            "Couldn't reach the server to load your saved puzzles. Check your connection and try again."
-          );
-        }
+        setSavedPuzzles(cloud);
       })();
     } else {
       const raw = localStorage.getItem("crossword_puzzles");
@@ -1203,8 +1229,15 @@ export default function Home() {
         manualGrid: manualGrid.length > 0 ? manualGrid : undefined,
         manualGridSize: manualGrid.length > 0 ? manualGridSize : undefined,
       };
+      // Never persist metadata-only entries (no grid AND no answered clue) —
+      // those come from the cloud list when the session flips to signed-out and
+      // would otherwise get re-uploaded as empty duplicate rows on next sign-in.
       const updated = [
-        ...savedPuzzles.filter((p) => p.title !== puzzle.title),
+        ...savedPuzzles.filter(
+          (p) =>
+            p.title !== puzzle.title &&
+            (!!p.result || (p.clues || []).some((c) => c.answer?.trim()))
+        ),
         puzzle,
       ];
       setSavedPuzzles(updated);
