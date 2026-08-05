@@ -1044,15 +1044,15 @@ export default function Home() {
   function captureManualWords() {
     if (!result) return;
 
-    // Build a lookup: answer text -> clue text (from placed words + clue list)
-    const clueLookup = new Map<string, string>();
-    for (const w of result.placedWords) {
-      if (w.clue) clueLookup.set(w.answer, w.clue);
-    }
+    // Build per-answer QUEUES of clue text so repeated answers (e.g. two ELs
+    // with different clues) keep distinct clues instead of collapsing to one.
+    // The clue list (as shown) is the source, in order.
+    const clueQueues = new Map<string, string[]>();
     for (const c of clues) {
-      if (c.answer.trim() && c.clue.trim()) {
-        clueLookup.set(c.answer.toUpperCase(), c.clue);
-      }
+      if (!c.answer.trim()) continue;
+      const a = c.answer.toUpperCase();
+      if (!clueQueues.has(a)) clueQueues.set(a, []);
+      clueQueues.get(a)!.push(c.clue || "");
     }
 
     // Detect ALL words in the manual grid (pass empty existing list so nothing is filtered)
@@ -1067,9 +1067,19 @@ export default function Home() {
       return;
     }
 
-    // Assign clue text from lookup
+    // Assign clue text in order per answer, so each occurrence keeps its own.
+    // If the grid has more of an answer than the clue list (a newly-added
+    // duplicate), fall back to any existing placed-word clue, else blank.
+    const consumed = new Map<string, number>();
     for (const w of allDetected) {
-      w.clue = clueLookup.get(w.answer) || "";
+      const a = w.answer.toUpperCase();
+      const q = clueQueues.get(a) || [];
+      const i = consumed.get(a) || 0;
+      w.clue =
+        q[i] ??
+        result.placedWords.find((pw) => pw.answer.toUpperCase() === a && (pw.clue || "").trim())?.clue ??
+        "";
+      consumed.set(a, i + 1);
     }
 
     // Trim the manual grid to bounding box
@@ -1114,11 +1124,25 @@ export default function Home() {
     // numbering produced by the capture.
     const synced = resyncClueRefs(clues, result.placedWords, numberedWords);
 
-    // Add any truly new words (no clue text found) to the clue list
-    const existingAnswers = new Set(clues.map((c) => c.answer.toUpperCase()));
-    const newClueEntries: ClueEntry[] = allDetected
-      .filter((w) => !existingAnswers.has(w.answer))
-      .map((w) => ({ answer: w.answer, clue: "" }));
+    // Add clue-list rows for any answer the grid now has MORE of than the clue
+    // list — counting occurrences, not just presence — so a newly-added
+    // duplicate (e.g. a 2nd EL) gets its own row instead of being dropped.
+    const gridCounts = new Map<string, number>();
+    for (const w of allDetected) {
+      const a = w.answer.toUpperCase();
+      gridCounts.set(a, (gridCounts.get(a) || 0) + 1);
+    }
+    const clueCounts = new Map<string, number>();
+    for (const c of synced) {
+      if (!c.answer.trim()) continue;
+      const a = c.answer.toUpperCase();
+      clueCounts.set(a, (clueCounts.get(a) || 0) + 1);
+    }
+    const newClueEntries: ClueEntry[] = [];
+    for (const [a, gc] of gridCounts) {
+      const need = gc - (clueCounts.get(a) || 0);
+      for (let k = 0; k < need; k++) newClueEntries.push({ answer: a, clue: "" });
+    }
     if (newClueEntries.length > 0) {
       const existingClues = synced.filter((c) => c.answer.trim());
       setClues([...existingClues, ...newClueEntries]);
