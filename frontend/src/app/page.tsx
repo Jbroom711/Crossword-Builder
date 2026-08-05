@@ -646,13 +646,21 @@ export default function Home() {
   function removeClue(index: number) {
     if (clues.length <= 1) return;
     const removedAnswer = clues[index].answer.trim().toUpperCase();
+    const removedClueText = clues[index].clue.trim();
     let newClues = clues.filter((_, i) => i !== index);
 
-    // If that answer is currently placed in the grid, remove it from the layout
-    // too — otherwise its cells linger as orphaned boxes in Automatic mode.
+    // If that answer is currently placed in the grid, remove exactly ONE matching
+    // placement — the one whose clue matches this row — so deleting one of a pair
+    // of repeated answers (e.g. two ALHAMBRAs) keeps the other. Otherwise the
+    // removed word's cells would linger as orphaned boxes in Automatic mode.
     if (result && removedAnswer) {
-      const remaining = result.placedWords.filter((w) => w.answer !== removedAnswer);
-      if (remaining.length !== result.placedWords.length) {
+      const placed = result.placedWords;
+      let idx = placed.findIndex(
+        (w) => w.answer.toUpperCase() === removedAnswer && (w.clue || "").trim() === removedClueText
+      );
+      if (idx < 0) idx = placed.findIndex((w) => w.answer.toUpperCase() === removedAnswer);
+      if (idx >= 0) {
+        const remaining = placed.filter((_, i) => i !== idx);
         const rebuilt = buildResultFromPlacedWords(remaining);
         if (rebuilt) {
           setResult(rebuilt.result);
