@@ -299,6 +299,8 @@ export default function Home() {
   const [savedPuzzles, setSavedPuzzles] = useState<SavedPuzzle[]>([]);
   const [showSaved, setShowSaved] = useState(false);
   const [saveTimestamp, setSaveTimestamp] = useState<string | null>(null);
+  // Transient positive confirmation (e.g. a successful transfer).
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     message: string;
     onConfirm: () => void;
@@ -321,6 +323,46 @@ export default function Home() {
   const [hiddenMessageMode, setHiddenMessageMode] = useState(false);
   const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
   const [hiddenMessageText, setHiddenMessageText] = useState("");
+
+  // Undo — snapshot the editable state before destructive ops (delete a clue,
+  // generate, capture, clear, manual-grid edits) so one click steps back.
+  type UndoSnapshot = {
+    clues: ClueEntry[];
+    result: CrosswordResult | null;
+    manualGrid: (string | null)[][];
+    manualGridSize: { rows: number; cols: number };
+    mode: "auto" | "manual";
+    puzzleTitle: string;
+    puzzleByline: string;
+    hiddenMessageCells: { r: number; c: number }[];
+    hiddenMessageText: string;
+    label: string;
+  };
+  const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+  // Always-current state, so pushUndo() captures the latest values even from a
+  // memoized handler (avoids stale closures). Assigned during render.
+  const liveStateRef = useRef<Omit<UndoSnapshot, "label">>(null as never);
+  function pushUndo(label: string) {
+    const snap = { ...liveStateRef.current, label };
+    setUndoStack((s) => [...s.slice(-24), snap]);
+  }
+  function undo() {
+    setUndoStack((s) => {
+      if (s.length === 0) return s;
+      const snap = s[s.length - 1];
+      setClues(snap.clues);
+      setResult(snap.result);
+      setManualGrid(snap.manualGrid);
+      setManualGridSize(snap.manualGridSize);
+      setMode(snap.mode);
+      setPuzzleTitle(snap.puzzleTitle);
+      setPuzzleByline(snap.puzzleByline);
+      setHiddenMessageCells(snap.hiddenMessageCells);
+      setHiddenMessageText(snap.hiddenMessageText);
+      setSelectedCell(null);
+      return s.slice(0, -1);
+    });
+  }
 
   // Clicking a clue number highlights that word's cells in the grid. Cleared by
   // clicking anywhere that isn't a clue-number link.
@@ -671,6 +713,7 @@ export default function Home() {
 
   function removeClue(index: number) {
     if (clues.length <= 1) return;
+    pushUndo("delete clue");
     const removedAnswer = clues[index].answer.trim().toUpperCase();
     const removedClueText = clues[index].clue.trim();
     let newClues = clues.filter((_, i) => i !== index);
@@ -721,6 +764,7 @@ export default function Home() {
   }
 
   async function doGenerate() {
+    pushUndo("generate");
     // Only answers are needed to lay out the grid — clue text can be filled in
     // later. (Previously this required clue text too, so answer-only entries
     // were silently dropped from the request.)
@@ -956,6 +1000,7 @@ export default function Home() {
 
       if (e.key.length === 1 && /^[A-Za-z]$/.test(e.key)) {
         e.preventDefault();
+        pushUndo("type letter");
         const updated = manualGrid.map((row) => [...row]);
         updated[r][c] = e.key.toUpperCase();
         setManualGrid(updated);
@@ -968,6 +1013,7 @@ export default function Home() {
         }
       } else if (e.key === "Backspace") {
         e.preventDefault();
+        pushUndo("erase letter");
         const updated = manualGrid.map((row) => [...row]);
         if (updated[r][c]) {
           updated[r][c] = null;
@@ -1008,6 +1054,7 @@ export default function Home() {
   // Sync clue text from the clues list onto existing placed words — no layout changes.
   function syncClues() {
     if (!result) return;
+    pushUndo("sync clues");
     const clueLookup = new Map<string, string>();
     for (const c of clues) {
       if (c.answer.trim() && c.clue.trim()) {
@@ -1043,6 +1090,7 @@ export default function Home() {
   // looking up clue text from both the existing result and the clues list.
   function captureManualWords() {
     if (!result) return;
+    pushUndo("capture from grid");
 
     // Build per-answer QUEUES of clue text so repeated answers (e.g. two ELs
     // with different clues) keep distinct clues instead of collapsing to one.
@@ -1319,6 +1367,36 @@ export default function Home() {
     setDraftToRestore(null);
     setManualChanged(false);
     setShowSaved(false);
+  }
+
+  // Hand a saved puzzle to another user's account (by email). On success it
+  // leaves this account's list and they become the editor.
+  async function transferPuzzle(id: string, title: string) {
+    const email = window.prompt(
+      `Transfer "${title || "this puzzle"}" to another Crossword Builder user.\n\n` +
+        `Enter their account email. The puzzle will LEAVE your list and they become the editor.`
+    );
+    if (!email || !email.trim()) return;
+    try {
+      const res = await fetch("/api/puzzles/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Transfer failed.");
+        return;
+      }
+      setSavedPuzzles((ps) => ps.filter((p) => p.id !== id));
+      if (currentPuzzleId === id) {
+        setCurrentPuzzleId(null);
+      }
+      setError(null);
+      setNotice(`Transferred "${title}" to ${data.to}. It's now in their account.`);
+    } catch {
+      setError("Couldn't reach the server to transfer. Please try again.");
+    }
   }
 
   async function deletePuzzle(id: string) {
@@ -2035,6 +2113,19 @@ export default function Home() {
   const clueCount = clues.filter((c) => c.answer.trim()).length;
   const clueCountLabel = `${clueCount} ${clueCount === 1 ? "clue" : "clues"}`;
 
+  // Keep the undo snapshot source current (see pushUndo).
+  liveStateRef.current = {
+    clues,
+    result,
+    manualGrid,
+    manualGridSize,
+    mode,
+    puzzleTitle,
+    puzzleByline,
+    hiddenMessageCells,
+    hiddenMessageText,
+  };
+
   // Map each clue-list row to a DISTINCT placed word. For repeated answers
   // (e.g. three ELs) the k-th clue row is paired with the k-th placement, so
   // each row shows its own number instead of all sharing the first one.
@@ -2255,6 +2346,7 @@ export default function Home() {
                       message: "Start a new puzzle?\nAny unsaved progress will be lost.",
                       onConfirm: () => {
                         setConfirmModal(null);
+                        pushUndo("new puzzle");
                         setPuzzleTitle("");
                         setPuzzleByline("");
                         setClues([{ answer: "", clue: "" }]);
@@ -2315,6 +2407,23 @@ export default function Home() {
             </h2>
             <div className="flex gap-2">
               <button
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                title={
+                  undoStack.length
+                    ? `Undo ${undoStack[undoStack.length - 1].label}`
+                    : "Nothing to undo"
+                }
+                className={`px-3 py-1.5 text-sm rounded transition border ${
+                  undoStack.length
+                    ? "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                    : "bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed"
+                }`}
+                style={{ fontFamily: FONT_BODY }}
+              >
+                ↶ Undo
+              </button>
+              <button
                 onClick={() => setShowSaved(!showSaved)}
                 className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
                 style={{ fontFamily: FONT_BODY }}
@@ -2370,12 +2479,23 @@ export default function Home() {
                         {p.date}
                       </span>
                     </button>
-                    <button
-                      onClick={() => deletePuzzle(p.id)}
-                      className="text-xs text-red-400 hover:text-red-600 ml-2"
-                    >
-                      delete
-                    </button>
+                    <div className="flex items-center gap-2 ml-2 shrink-0">
+                      {isSignedIn && (
+                        <button
+                          onClick={() => transferPuzzle(p.id, p.title)}
+                          title="Send this puzzle to another user's account"
+                          className="text-xs text-blue-500 hover:text-blue-700"
+                        >
+                          transfer
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deletePuzzle(p.id)}
+                        className="text-xs text-red-400 hover:text-red-600"
+                      >
+                        delete
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -2535,6 +2655,18 @@ export default function Home() {
 
           {error && (
             <p className="mt-3 text-red-600 text-sm font-medium">{error}</p>
+          )}
+          {notice && (
+            <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-green-300 bg-green-50 px-3 py-2">
+              <p className="text-green-800 text-sm font-medium">{notice}</p>
+              <button
+                onClick={() => setNotice(null)}
+                className="text-green-700 hover:text-green-900 text-sm shrink-0"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
           )}
 
           {/* Action buttons */}
