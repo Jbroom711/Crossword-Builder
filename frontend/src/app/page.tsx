@@ -304,6 +304,10 @@ export default function Home() {
   const [confirmModal, setConfirmModal] = useState<{
     message: string;
     onConfirm: () => void;
+    confirmLabel?: string;
+    // Optional middle button (e.g. "Discard") for 3-way prompts.
+    secondaryLabel?: string;
+    onSecondary?: () => void;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
@@ -1218,12 +1222,13 @@ export default function Home() {
     }
   }
 
-  async function savePuzzle() {
+  // Returns true only if the puzzle was actually persisted.
+  async function savePuzzle(): Promise<boolean> {
     // Allow saving before a grid is generated — the answers/clues are worth
     // protecting on their own. Only bail if there's genuinely nothing entered.
     if (!hasEditableContent(puzzleTitle, clues, result)) {
       setError("Nothing to save yet — enter a title or at least one answer first.");
-      return;
+      return false;
     }
 
     const now = new Date();
@@ -1265,7 +1270,7 @@ export default function Home() {
           setError(
             "Couldn't save to your account. Your puzzle is NOT saved yet — please try again."
           );
-          return;
+          return false;
         }
         const saved = await res.json();
         if (saved.id) setCurrentPuzzleId(saved.id);
@@ -1286,7 +1291,7 @@ export default function Home() {
         setError(
           "Couldn't reach the server to save. Your puzzle is NOT saved yet — please try again."
         );
-        return;
+        return false;
       }
     } else {
       // Fall back to localStorage
@@ -1321,6 +1326,69 @@ export default function Home() {
     }
 
     setSaveTimestamp(ts);
+    return true;
+  }
+
+  // Reset the editor to an empty puzzle (used by "New Puzzle" and when leaving a
+  // puzzle to view the saved library).
+  function clearEditor() {
+    setPuzzleTitle("");
+    setPuzzleByline("");
+    setClues([{ answer: "", clue: "" }]);
+    setResult(null);
+    setCurrentPuzzleId(null);
+    setManualGrid([]);
+    setManualGridSize({ rows: 0, cols: 0 });
+    setSelectedCell(null);
+    setMode("auto");
+    setHiddenMessageMode(false);
+    setHiddenMessageCells([]);
+    setHiddenMessageText("");
+    setError(null);
+    setSaveTimestamp(null);
+    setManualChanged(false);
+    setUndoStack([]);
+    pendingBaselineRef.current = true;
+    setDraftToRestore(null);
+    localStorage.removeItem(DRAFT_KEY);
+    setDirty(false);
+  }
+
+  // "⌂ Saved" acts as Home: leave the current puzzle and show the library. If
+  // the list is already open, just close it. If there are unsaved changes,
+  // prompt to Save / Discard first so work isn't lost.
+  function openLibrary() {
+    if (showSaved) {
+      setShowSaved(false);
+      return;
+    }
+    const inPuzzle = hasEditableContent(puzzleTitle, clues, result);
+    const goHome = () => {
+      clearEditor();
+      setShowSaved(true);
+    };
+    if (inPuzzle && dirty) {
+      setConfirmModal({
+        message: `You have unsaved changes${
+          puzzleTitle ? ` to "${puzzleTitle}"` : ""
+        }. Save them before leaving to your saved puzzles?`,
+        confirmLabel: "Save & continue",
+        onConfirm: async () => {
+          const ok = await savePuzzle();
+          setConfirmModal(null);
+          // Only leave the puzzle if it actually saved; on failure the error
+          // banner shows and the puzzle stays loaded.
+          if (ok) goHome();
+        },
+        secondaryLabel: "Discard",
+        onSecondary: () => {
+          setConfirmModal(null);
+          goHome();
+        },
+      });
+    } else {
+      goHome();
+    }
   }
 
   async function loadPuzzle(puzzle: SavedPuzzle) {
@@ -2267,12 +2335,20 @@ export default function Home() {
               >
                 Cancel
               </button>
+              {confirmModal.secondaryLabel && (
+                <button
+                  onClick={confirmModal.onSecondary}
+                  className="flex-1 py-2 text-sm border-2 border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition font-medium"
+                >
+                  {confirmModal.secondaryLabel}
+                </button>
+              )}
               <button
                 onClick={confirmModal.onConfirm}
                 className="flex-1 py-2 text-sm text-white rounded-lg transition font-medium"
                 style={{ background: "#56ca23" }}
               >
-                Confirm
+                {confirmModal.confirmLabel || "Confirm"}
               </button>
             </div>
           </div>
@@ -2399,8 +2475,8 @@ export default function Home() {
           {/* Library / home — actions NOT tied to the current puzzle */}
           <div className="flex items-center justify-between gap-2 mb-4">
             <button
-              onClick={() => setShowSaved(!showSaved)}
-              title="Your saved puzzles"
+              onClick={openLibrary}
+              title="Leave this puzzle and view your saved puzzles"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
               style={{ fontFamily: FONT_BODY }}
             >
