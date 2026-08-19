@@ -19,7 +19,6 @@ app = FastAPI(title="Crossword Builder API")
 allowed_origins = [
     "http://localhost:3030",
     "http://localhost:3000",
-    "https://crossword-builder-jsham.vercel.app",
     "https://crosswordbuilderjsham.com",
     "https://www.crosswordbuilderjsham.com",
 ]
