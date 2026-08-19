@@ -2396,65 +2396,34 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold" style={{ fontFamily: FONT_HEADING }}>
-              Clues
-              {clueCount > 0 && (
-                <span className="ml-2 text-sm font-normal text-gray-400">
-                  ({clueCount})
-                </span>
-              )}
-            </h2>
-            <div className="flex gap-2">
-              <button
-                onClick={undo}
-                disabled={undoStack.length === 0}
-                title={
-                  undoStack.length
-                    ? `Undo ${undoStack[undoStack.length - 1].label}`
-                    : "Nothing to undo"
-                }
-                className={`px-3 py-1.5 text-sm rounded transition border ${
-                  undoStack.length
-                    ? "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
-                    : "bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed"
-                }`}
-                style={{ fontFamily: FONT_BODY }}
-              >
-                ↶ Undo
-              </button>
-              <button
-                onClick={() => setShowSaved(!showSaved)}
-                className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
-                style={{ fontFamily: FONT_BODY }}
-              >
-                {showSaved ? "Hide Saved" : `Saved (${savedPuzzles.length})`}
-              </button>
-              {savedPuzzles.length > 0 && (
-                <button
-                  onClick={exportPuzzles}
-                  title="Download a JSON backup of all your saved puzzles"
-                  className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
-                  style={{ fontFamily: FONT_BODY }}
-                >
-                  Export
-                </button>
-              )}
+          {/* Library / home — actions NOT tied to the current puzzle */}
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <button
+              onClick={() => setShowSaved(!showSaved)}
+              title="Your saved puzzles"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              <span aria-hidden className="text-base leading-none">⌂</span>
+              {showSaved ? "Hide Saved" : `Saved (${savedPuzzles.length})`}
+            </button>
+            {/* Upload only makes sense before you're in a puzzle */}
+            {!hasEditableContent(puzzleTitle, clues, result) && (
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
+                className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                 style={{ fontFamily: FONT_BODY }}
               >
                 Upload CSV/JSON
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.json"
-                className="hidden"
-                onChange={handleUpload}
-              />
-            </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.json"
+              className="hidden"
+              onChange={handleUpload}
+            />
           </div>
 
           {/* Saved puzzles dropdown */}
@@ -2501,6 +2470,47 @@ export default function Home() {
               )}
             </div>
           )}
+
+          {/* Clues heading + current-puzzle actions */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold" style={{ fontFamily: FONT_HEADING }}>
+              Clues
+              {clueCount > 0 && (
+                <span className="ml-2 text-sm font-normal text-gray-400">
+                  ({clueCount})
+                </span>
+              )}
+            </h2>
+            <div className="flex gap-2">
+              <button
+                onClick={undo}
+                disabled={undoStack.length === 0}
+                title={
+                  undoStack.length
+                    ? `Undo ${undoStack[undoStack.length - 1].label}`
+                    : "Nothing to undo"
+                }
+                className={`px-3 py-1.5 text-sm rounded-lg transition border ${
+                  undoStack.length
+                    ? "bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100"
+                    : "bg-gray-100 border-gray-200 text-gray-300 cursor-not-allowed"
+                }`}
+                style={{ fontFamily: FONT_BODY }}
+              >
+                ↶ Undo
+              </button>
+              {savedPuzzles.length > 0 && (
+                <button
+                  onClick={exportPuzzles}
+                  title="Download a JSON backup of all your saved puzzles"
+                  className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                  style={{ fontFamily: FONT_BODY }}
+                >
+                  Export
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Clue entries */}
           <div className="space-y-3 mb-4">
