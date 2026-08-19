@@ -24,7 +24,7 @@ export default function RootLayout({
       <html lang="en">
         <head>
           {/* build marker — bumped to force fresh asset fingerprints on deploy */}
-          <meta name="app-build" content="2026-08-19-actions-tidy" />
+          <meta name="app-build" content="2026-08-19-clerk-prod" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link
