@@ -14,15 +14,18 @@ CLUE_KEYS = {"clue", "clues", "question", "questions", "hint", "definition", "pr
 
 app = FastAPI(title="Crossword Builder API")
 
-# Allow localhost for dev + any deployed frontend via CORS_ORIGINS env var
+# Allow localhost for dev + any deployed frontend via CORS_ORIGINS env var.
+# Browsers send the Origin header lowercased, so list these lowercase.
 allowed_origins = [
     "http://localhost:3030",
     "http://localhost:3000",
     "https://crossword-builder-jsham.vercel.app",
+    "https://crosswordbuilderjsham.com",
+    "https://www.crosswordbuilderjsham.com",
 ]
 extra_origins = os.environ.get("CORS_ORIGINS", "")
 if extra_origins:
-    allowed_origins.extend(extra_origins.split(","))
+    allowed_origins.extend(o.strip() for o in extra_origins.split(",") if o.strip())
 
 app.add_middleware(
     CORSMiddleware,
