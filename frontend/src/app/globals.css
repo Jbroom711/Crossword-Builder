@@ -63,54 +63,30 @@ body {
   background: var(--bg-black);
 }
 
+/* Letters and numbers scale with the cell size (which is base × zoom), so the
+   grid stays proportional at any zoom — including very small, to fit big grids
+   on a laptop. Clamped so tiny numbers stay barely legible / never zero. */
 .crossword-cell .cell-number {
   position: absolute;
   top: 1px;
   left: 2px;
   font-family: var(--font-body);
-  font-size: 9px;
+  /* Cap the max so it never looks huge; no floor so it shrinks away cleanly
+     (rather than overflowing) when the grid is zoomed way down. */
+  font-size: min(calc(var(--cell-size) * 0.24), 12px);
   font-weight: 600;
   color: var(--number-color);
   line-height: 1;
 }
 
-@media (max-width: 640px) {
-  .crossword-cell .cell-number {
-    font-size: 7px;
-  }
-}
-
 .crossword-cell .cell-letter {
   font-family: var(--font-body);
-  font-size: 18px;
+  font-size: calc(var(--cell-size) * 0.55);
+  line-height: 1;
   font-weight: 500;
   color: var(--letter-color);
   text-transform: uppercase;
   user-select: none;
-}
-
-@media (max-width: 640px) {
-  .crossword-cell .cell-letter {
-    font-size: 14px;
-  }
-}
-
-/* Scale letters/numbers with the larger desktop cells */
-@media (min-width: 1024px) {
-  .crossword-cell .cell-letter {
-    font-size: 22px;
-  }
-  .crossword-cell .cell-number {
-    font-size: 10px;
-  }
-}
-@media (min-width: 1440px) {
-  .crossword-cell .cell-letter {
-    font-size: 26px;
-  }
-  .crossword-cell .cell-number {
-    font-size: 11px;
-  }
 }
 
 /* Grid scrollable on mobile */

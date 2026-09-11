@@ -64,7 +64,7 @@ const DRAFT_KEY = "crossword_draft";
 
 // User-controlled grid zoom (multiplies the responsive base cell size).
 const GRID_ZOOM_KEY = "crossword_grid_zoom";
-const ZOOM_MIN = 0.5;
+const ZOOM_MIN = 0.2; // lets big grids shrink to fit a laptop screen
 const ZOOM_MAX = 2.5;
 const ZOOM_STEP = 0.15;
 function clampZoom(z: number): number {
@@ -3357,9 +3357,11 @@ export default function Home() {
                             >
                               {hasLetter && (
                                 <span
-                                  className="text-lg lg:text-xl font-medium select-none"
+                                  className="font-medium select-none leading-none"
                                   style={{
                                     fontFamily: FONT_BODY,
+                                    // Scale with the cell so it stays proportional at any zoom.
+                                    fontSize: "calc(var(--cell-size) * 0.55)",
                                     color: isLocked ? "#000" : "#2563eb",
                                   }}
                                 >
