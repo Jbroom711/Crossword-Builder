@@ -24,7 +24,7 @@ export default function RootLayout({
       <html lang="en">
         <head>
           {/* build marker — bumped to force fresh asset fingerprints on deploy */}
-          <meta name="app-build" content="2026-09-10-revert-layout" />
+          <meta name="app-build" content="2026-09-10-region-move" />
           <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
           <link

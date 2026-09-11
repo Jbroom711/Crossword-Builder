@@ -323,6 +323,14 @@ export default function Home() {
   // Generate button (regenerating would discard their manual layout).
   const [manualChanged, setManualChanged] = useState(false);
 
+  // Region select-and-move (manual mode): drag a rectangular marquee over a block
+  // of letters, then move it (drag or arrow keys) to reconnect elsewhere.
+  const [regionMode, setRegionMode] = useState(false);
+  const [selRect, setSelRect] = useState<{ r0: number; c0: number; r1: number; c1: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ dr: number; dc: number }>({ dr: 0, dc: 0 });
+  const marqueeRef = useRef<{ r: number; c: number } | null>(null); // anchor while drawing a marquee
+  const moveDragRef = useRef<{ startR: number; startC: number } | null>(null); // origin while dragging a block
+
   // Hidden message state
   const [hiddenMessageMode, setHiddenMessageMode] = useState(false);
   const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
@@ -1020,8 +1028,129 @@ export default function Home() {
     jumpToClue(answer);
   }
 
+  // --- Region select-and-move (manual mode) ---
+  const regionModeRef = useRef(false);
+  const selRectRef = useRef<typeof selRect>(null);
+  regionModeRef.current = regionMode;
+  selRectRef.current = selRect;
+
+  // Move the letters inside the selection by (dr, dc). Grows the grid down/right
+  // as needed (append never shifts existing indices, keeping letter coloring
+  // valid); refuses to cross the top/left edge or to overwrite non-selected
+  // letters. Nothing is captured yet — moved letters read as "edited" until the
+  // user hits Capture.
+  function moveSelection(dr: number, dc: number) {
+    if (!selRect || manualGrid.length === 0) return;
+    const rows = manualGridSize.rows;
+    const cols = manualGridSize.cols;
+    const src: { r: number; c: number; ch: string }[] = [];
+    for (let r = selRect.r0; r <= selRect.r1; r++)
+      for (let c = selRect.c0; c <= selRect.c1; c++) {
+        const ch = manualGrid[r]?.[c];
+        if (ch != null) src.push({ r, c, ch });
+      }
+    const newRect = {
+      r0: selRect.r0 + dr,
+      c0: selRect.c0 + dc,
+      r1: selRect.r1 + dr,
+      c1: selRect.c1 + dc,
+    };
+    if (newRect.r0 < 0 || newRect.c0 < 0) return; // don't push past top/left edge
+    if (src.length === 0) {
+      setSelRect(newRect);
+      return;
+    }
+    const maxTR = Math.max(newRect.r1, ...src.map((s) => s.r + dr));
+    const maxTC = Math.max(newRect.c1, ...src.map((s) => s.c + dc));
+    const newRows = Math.max(rows, maxTR + 1);
+    const newCols = Math.max(cols, maxTC + 1);
+    const g: (string | null)[][] = Array.from({ length: newRows }, (_, r) =>
+      Array.from({ length: newCols }, (_, c) =>
+        r < rows && c < cols ? manualGrid[r][c] : null
+      )
+    );
+    const srcSet = new Set(src.map((s) => `${s.r},${s.c}`));
+    for (const s of src) {
+      const tr = s.r + dr;
+      const tc = s.c + dc;
+      if (g[tr][tc] != null && !srcSet.has(`${tr},${tc}`)) return; // collision
+    }
+    pushUndo("move region");
+    for (const s of src) g[s.r][s.c] = null;
+    for (const s of src) g[s.r + dr][s.c + dc] = s.ch;
+    setManualGrid(g);
+    setManualGridSize({ rows: newRows, cols: newCols });
+    setSelRect(newRect);
+    setManualChanged(true);
+  }
+  const moveSelRef = useRef(moveSelection);
+  moveSelRef.current = moveSelection;
+
+  function toggleRegionMode() {
+    setRegionMode((on) => {
+      const next = !on;
+      setSelRect(null);
+      marqueeRef.current = null;
+      moveDragRef.current = null;
+      setDragOffset({ dr: 0, dc: 0 });
+      if (next) setSelectedCell(null);
+      return next;
+    });
+  }
+  function regionCellDown(r: number, c: number) {
+    if (selRect && r >= selRect.r0 && r <= selRect.r1 && c >= selRect.c0 && c <= selRect.c1) {
+      moveDragRef.current = { startR: r, startC: c };
+      setDragOffset({ dr: 0, dc: 0 });
+    } else {
+      marqueeRef.current = { r, c };
+      setSelRect({ r0: r, c0: c, r1: r, c1: c });
+    }
+  }
+  function regionCellEnter(r: number, c: number) {
+    if (marqueeRef.current) {
+      const a = marqueeRef.current;
+      setSelRect({ r0: Math.min(a.r, r), c0: Math.min(a.c, c), r1: Math.max(a.r, r), c1: Math.max(a.c, c) });
+    } else if (moveDragRef.current) {
+      const m = moveDragRef.current;
+      setDragOffset({ dr: r - m.startR, dc: c - m.startC });
+    }
+  }
+  function regionPointerUp() {
+    if (moveDragRef.current) {
+      const { dr, dc } = dragOffset;
+      moveDragRef.current = null;
+      setDragOffset({ dr: 0, dc: 0 });
+      if (dr || dc) moveSelection(dr, dc);
+    }
+    marqueeRef.current = null;
+  }
+  // End any drag if the mouse is released outside the grid.
+  useEffect(() => {
+    const up = () => {
+      marqueeRef.current = null;
+      moveDragRef.current = null;
+      setDragOffset({ dr: 0, dc: 0 });
+    };
+    window.addEventListener("mouseup", up);
+    return () => window.removeEventListener("mouseup", up);
+  }, []);
+
   const handleManualKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // In region mode, arrow keys nudge the selected block (Esc deselects).
+      if (regionModeRef.current) {
+        if (!selRectRef.current) return;
+        const nudge: Record<string, [number, number]> = {
+          ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1],
+        };
+        if (nudge[e.key]) {
+          e.preventDefault();
+          moveSelRef.current(nudge[e.key][0], nudge[e.key][1]);
+        } else if (e.key === "Escape") {
+          setSelRect(null);
+        }
+        return;
+      }
       if (!selectedCell) return;
       const { r, c } = selectedCell;
       const dr = manualDirection === "down" ? 1 : 0;
@@ -1120,6 +1249,7 @@ export default function Home() {
   function captureManualWords() {
     if (!result) return;
     pushUndo("capture from grid");
+    setSelRect(null); // the grid is about to be rebuilt/renumbered — drop stale selection
 
     // Build per-answer QUEUES of clue text so repeated answers (e.g. two ELs
     // with different clues) keep distinct clues instead of collapsing to one.
@@ -1243,6 +1373,8 @@ export default function Home() {
         captureManualWords();
       }
       setSelectedCell(null);
+      setRegionMode(false);
+      setSelRect(null);
       setMode("auto");
     }
   }
@@ -1374,6 +1506,8 @@ export default function Home() {
     setManualChanged(false);
     setUndoStack([]);
     setPrevLayout(null);
+    setRegionMode(false);
+    setSelRect(null);
     pendingBaselineRef.current = true;
     setDraftToRestore(null);
     localStorage.removeItem(DRAFT_KEY);
@@ -2827,9 +2961,40 @@ export default function Home() {
               {mode === "manual" && (
                 <div className="mt-2 space-y-1">
                   <p className="text-xs text-gray-500" style={{ fontFamily: FONT_BODY }}>
-                    Click a cell and type to add letters. Press <strong>Tab</strong> to toggle across/down.
-                    Arrow keys to navigate. Currently typing: <strong>{manualDirection}</strong>.
+                    {regionMode ? (
+                      <>Drag a box over a block of letters, then <strong>drag it</strong> or use the <strong>arrow keys</strong> to move it. Reconnect with new letters, then Capture.</>
+                    ) : (
+                      <>Click a cell and type to add letters. Press <strong>Tab</strong> to toggle across/down. Arrow keys to navigate. Currently typing: <strong>{manualDirection}</strong>.</>
+                    )}
                   </p>
+                  <button
+                    onClick={toggleRegionMode}
+                    className={`w-full py-2 text-sm rounded-lg transition font-medium border-2 ${
+                      regionMode
+                        ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
+                        : "border-blue-300 text-blue-700 hover:bg-blue-50"
+                    }`}
+                    style={{ fontFamily: FONT_BODY }}
+                  >
+                    {regionMode ? "✓ Select & Move — done" : "⤢ Select & Move a region"}
+                  </button>
+                  {regionMode && (
+                    <div className="flex items-center justify-center gap-2 py-1">
+                      <div className="grid grid-cols-3 gap-1">
+                        <span />
+                        <button onClick={() => moveSelection(-1, 0)} disabled={!selRect} className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100" title="Move up">▲</button>
+                        <span />
+                        <button onClick={() => moveSelection(0, -1)} disabled={!selRect} className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100" title="Move left">◀</button>
+                        <button onClick={() => moveSelection(1, 0)} disabled={!selRect} className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100" title="Move down">▼</button>
+                        <button onClick={() => moveSelection(0, 1)} disabled={!selRect} className="px-2 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-100" title="Move right">▶</button>
+                      </div>
+                      {selRect && (
+                        <button onClick={() => setSelRect(null)} className="ml-2 text-xs text-gray-500 hover:text-gray-800 underline">
+                          Deselect
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <button
                     onClick={captureManualWords}
                     className="w-full py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
@@ -3143,10 +3308,25 @@ export default function Home() {
                           const isSelected = selectedCell?.r === r && selectedCell?.c === c;
                           const isLocked = lockedCells.has(`${r},${c}`);
                           const hasLetter = cell !== null;
+                          const inSel = !!(
+                            regionMode && selRect &&
+                            r >= selRect.r0 && r <= selRect.r1 &&
+                            c >= selRect.c0 && c <= selRect.c1
+                          );
                           return (
                             <div
                               key={`${r}-${c}`}
+                              onMouseDown={(e) => {
+                                if (regionMode) { e.preventDefault(); regionCellDown(r, c); }
+                              }}
+                              onMouseEnter={() => {
+                                if (regionMode) regionCellEnter(r, c);
+                              }}
+                              onMouseUp={() => {
+                                if (regionMode) regionPointerUp();
+                              }}
                               onClick={() => {
+                                if (regionMode) return; // region mode uses mouse-drag, not click-to-type
                                 if (hiddenMessageMode && hasLetter) {
                                   toggleHiddenMessageCell(r - MANUAL_PADDING, c - MANUAL_PADDING);
                                 } else {
@@ -3155,20 +3335,23 @@ export default function Home() {
                                 }
                               }}
                               onDoubleClick={() => {
+                                if (regionMode) return;
                                 if (!hiddenMessageMode && hasLetter) handleManualDoubleClick(r, c);
                               }}
-                              className="relative flex items-center justify-center cursor-pointer"
+                              className={`relative flex items-center justify-center ${regionMode ? "cursor-move select-none" : "cursor-pointer"}`}
                               style={{
                                 width: "var(--cell-size)",
                                 height: "var(--cell-size)",
-                                background: isSelected
+                                background: inSel
+                                  ? "#bfdbfe"
+                                  : isSelected
                                   ? "#b8d4f0"
                                   : hasLetter && highlightCells.has(`${r},${c}`)
                                   ? "#fde68a"
                                   : hasLetter
                                   ? "#fff"
                                   : "#f5f5f0",
-                                outline: isSelected ? "2px solid #2563eb" : "none",
+                                outline: isSelected && !regionMode ? "2px solid #2563eb" : "none",
                                 outlineOffset: "-1px",
                               }}
                             >
@@ -3210,6 +3393,40 @@ export default function Home() {
                           }}
                         />
                       )}
+                      {/* Region selection outline */}
+                      {regionMode && selRect && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            gridRowStart: selRect.r0 + 1,
+                            gridRowEnd: selRect.r1 + 2,
+                            gridColumnStart: selRect.c0 + 1,
+                            gridColumnEnd: selRect.c1 + 2,
+                            border: "2px solid #2563eb",
+                            pointerEvents: "none",
+                            zIndex: 4,
+                          }}
+                        />
+                      )}
+                      {/* Drag ghost — where the block will land */}
+                      {regionMode && selRect && (dragOffset.dr !== 0 || dragOffset.dc !== 0) &&
+                        selRect.r0 + dragOffset.dr >= 0 && selRect.c0 + dragOffset.dc >= 0 && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              gridRowStart: selRect.r0 + dragOffset.dr + 1,
+                              gridRowEnd: selRect.r1 + dragOffset.dr + 2,
+                              gridColumnStart: selRect.c0 + dragOffset.dc + 1,
+                              gridColumnEnd: selRect.c1 + dragOffset.dc + 2,
+                              border: "2px dashed #2563eb",
+                              background: "rgba(37,99,235,0.12)",
+                              pointerEvents: "none",
+                              zIndex: 5,
+                            }}
+                          />
+                        )}
                     </div>
                   </div>
 
