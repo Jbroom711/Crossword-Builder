@@ -2552,6 +2552,7 @@ export default function Home() {
             <li>This allows you to maximize overlaps and add small words without losing base layout.</li>
             <li>After manual additions to the grid, click <strong>"Capture New Words from Grid"</strong> to update numbering, capture those answers, and allow you to enter the corresponding clues.</li>
             <li>If you edit any clues, click <strong>"Sync Clues (keep layout)"</strong> for the edits to be adopted.</li>
+            <li>You can reference one clue in another clue, with this syntax <strong>{"{23-across}"}</strong> or <strong>{"{11-down}"}</strong>, and if the puzzle numbering changes, that reference will update automatically. E.g. <em>Favorite ice cream of {"{23-across}"}</em></li>
           </ul>
         </details>
         <p className="mt-2 text-xs text-gray-400" style={{ fontFamily: FONT_BODY }}>
