@@ -443,6 +443,10 @@ export default function Home() {
   const [dirty, setDirty] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftHydrated = useRef(false);
+  // Cloud auto-save (signed-in): debounced longer than the local draft, with an
+  // in-flight guard so a first insert can't fire twice and create a duplicate.
+  const cloudTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudSaveInFlight = useRef(false);
   // Serialized snapshot of the currently saved/loaded puzzle. A draft is only
   // kept when the working content differs from this baseline (i.e. there are
   // genuinely unsaved changes) — so an already-saved puzzle never nags "restore?".
@@ -558,6 +562,55 @@ export default function Home() {
     manualGrid,
     manualGridSize,
     hiddenMessageMode,
+    hiddenMessageCells,
+    hiddenMessageText,
+    draftToRestore,
+  ]);
+
+  // Cloud auto-save: when signed in, also push changes to the account (not just
+  // the local draft). Debounced ~2.5s so rapid edits batch into one save. Only
+  // for puzzles that already live in the account (have an id) or have a title —
+  // so casual scratch typing doesn't spawn junk "Untitled" rows. New untitled
+  // work is still protected by the local draft until you name it or Save once.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    if (draftToRestore) return; // don't auto-save over a pending restore choice
+    if (!hasEditableContent(puzzleTitle, clues, result)) return;
+    if (!currentPuzzleId && !puzzleTitle.trim()) return;
+    const currentContent = JSON.stringify([
+      puzzleTitle,
+      puzzleByline,
+      clues,
+      result,
+      manualGrid,
+      manualGridSize,
+      hiddenMessageCells,
+      hiddenMessageText,
+    ]);
+    if (currentContent === savedContentRef.current) return; // nothing new since last save
+    if (cloudTimer.current) clearTimeout(cloudTimer.current);
+    cloudTimer.current = setTimeout(async () => {
+      if (cloudSaveInFlight.current) return; // a save is running; next edit will catch up
+      cloudSaveInFlight.current = true;
+      try {
+        await savePuzzle();
+      } finally {
+        cloudSaveInFlight.current = false;
+      }
+    }, 2500);
+    return () => {
+      if (cloudTimer.current) clearTimeout(cloudTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isSignedIn,
+    puzzleTitle,
+    puzzleByline,
+    currentPuzzleId,
+    clues,
+    result,
+    manualGrid,
+    manualGridSize,
     hiddenMessageCells,
     hiddenMessageText,
     draftToRestore,
@@ -1381,6 +1434,12 @@ export default function Home() {
 
   // Returns true only if the puzzle was actually persisted.
   async function savePuzzle(): Promise<boolean> {
+    // A manual save supersedes any pending cloud auto-save — cancel it so the
+    // two can't race and double-insert the same puzzle.
+    if (cloudTimer.current) {
+      clearTimeout(cloudTimer.current);
+      cloudTimer.current = null;
+    }
     // Allow saving before a grid is generated — the answers/clues are worth
     // protecting on their own. Only bail if there's genuinely nothing entered.
     if (!hasEditableContent(puzzleTitle, clues, result)) {
