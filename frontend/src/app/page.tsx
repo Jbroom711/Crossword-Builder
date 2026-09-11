@@ -343,6 +343,25 @@ export default function Home() {
     label: string;
   };
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+  // The layout that was replaced by the most recent (re)generate, so the user
+  // can revert if they prefer it. Set only when a layout already existed.
+  const [prevLayout, setPrevLayout] = useState<{
+    result: CrosswordResult;
+    clues: ClueEntry[];
+    manualGrid: (string | null)[][];
+    manualGridSize: { rows: number; cols: number };
+    mode: "auto" | "manual";
+  } | null>(null);
+  function revertLayout() {
+    if (!prevLayout) return;
+    setResult(prevLayout.result);
+    setClues(prevLayout.clues);
+    setManualGrid(prevLayout.manualGrid);
+    setManualGridSize(prevLayout.manualGridSize);
+    setMode(prevLayout.mode);
+    setSelectedCell(null);
+    setPrevLayout(null);
+  }
   // Always-current state, so pushUndo() captures the latest values even from a
   // memoized handler (avoids stale closures). Assigned during render.
   const liveStateRef = useRef<Omit<UndoSnapshot, "label">>(null as never);
@@ -777,6 +796,11 @@ export default function Home() {
       setError("Please enter at least 2 answers to generate a grid.");
       return;
     }
+    // Snapshot the layout we're about to replace so the user can revert to it.
+    // Only meaningful when a layout already exists (a re-generate).
+    const prior = result
+      ? { result, clues, manualGrid, manualGridSize, mode }
+      : null;
     setLoading(true);
     setError(null);
     try {
@@ -790,6 +814,7 @@ export default function Home() {
       setResult(data);
       reorderClues(data);
       buildManualGrid(data);
+      setPrevLayout(prior); // offer "revert" only after a successful re-generate
     } catch (e: any) {
       setError(e.message || "Something went wrong");
     } finally {
@@ -1348,6 +1373,7 @@ export default function Home() {
     setSaveTimestamp(null);
     setManualChanged(false);
     setUndoStack([]);
+    setPrevLayout(null);
     pendingBaselineRef.current = true;
     setDraftToRestore(null);
     localStorage.removeItem(DRAFT_KEY);
@@ -1392,6 +1418,7 @@ export default function Home() {
   }
 
   async function loadPuzzle(puzzle: SavedPuzzle) {
+    setPrevLayout(null);
     if (isSignedIn && puzzle.id) {
       // Fetch full puzzle from API
       try {
@@ -2719,6 +2746,19 @@ export default function Home() {
           >
             {loading ? "Generating..." : "Generate Crossword"}
           </button>
+
+          {/* Revert to the layout that this generate replaced. */}
+          {prevLayout && (
+            <div className="mt-2 text-center">
+              <button
+                onClick={revertLayout}
+                className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                ↩ Revert to previous layout
+              </button>
+            </div>
+          )}
 
           {/* Save is available at any time — even before generating a grid. */}
           <button
