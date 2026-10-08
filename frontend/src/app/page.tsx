@@ -3432,6 +3432,16 @@ export default function Home() {
                       Save
                     </button>
                   </div>
+                  {(dirty || saveTimestamp) && (
+                    <p
+                      className="-mt-1 mb-2 text-xs text-right text-gray-400"
+                      style={{ fontFamily: FONT_BODY }}
+                    >
+                      {dirty
+                        ? "Draft autosaved in this browser — click Save to keep it in your library."
+                        : `Saved on ${saveTimestamp}`}
+                    </p>
+                  )}
 
                   {hiddenMessageCells.length > 0 && (
                     <p
@@ -3675,6 +3685,16 @@ export default function Home() {
                         Save
                       </button>
                     </div>
+                    {(dirty || saveTimestamp) && (
+                      <p
+                        className="-mt-1 mb-2 text-xs text-right text-gray-400"
+                        style={{ fontFamily: FONT_BODY }}
+                      >
+                        {dirty
+                          ? "Draft autosaved in this browser — click Save to keep it in your library."
+                          : `Saved on ${saveTimestamp}`}
+                      </p>
+                    )}
 
                     {hiddenMessageCells.length > 0 && (
                       <p
