@@ -2511,6 +2511,20 @@ export default function Home() {
     });
   }
 
+  // Clue TEXT that appears on 2+ entries (identical, trimmed, case-insensitive).
+  // Those boxes get a lavender fill as a proofreading alert for an accidental
+  // duplicate clue. (Distinct from repeated ANSWERS, which are allowed.)
+  const duplicateClueTexts = (() => {
+    const counts = new Map<string, number>();
+    for (const c of clues) {
+      const t = c.clue.trim().toLowerCase();
+      if (t) counts.set(t, (counts.get(t) || 0) + 1);
+    }
+    const dups = new Set<string>();
+    for (const [t, n] of counts) if (n > 1) dups.add(t);
+    return dups;
+  })();
+
   // Cells of the currently-highlighted clue (in the coords of whichever grid is
   // shown — the manual grid is padding-offset from the result coords).
   const highlightCells = new Set<string>();
@@ -3017,8 +3031,22 @@ export default function Home() {
                       addClue();
                     }
                   }}
+                  title={
+                    clue.clue.trim() &&
+                    duplicateClueTexts.has(clue.clue.trim().toLowerCase())
+                      ? "This clue text is used on more than one entry."
+                      : undefined
+                  }
                   className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-black"
-                  style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                  style={{
+                    fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif",
+                    // Lavender alert when the same clue text appears on 2+ entries.
+                    backgroundColor:
+                      clue.clue.trim() &&
+                      duplicateClueTexts.has(clue.clue.trim().toLowerCase())
+                        ? "#e6e6fa"
+                        : undefined,
+                  }}
                 />
                 <button
                   onClick={() => removeClue(i)}
