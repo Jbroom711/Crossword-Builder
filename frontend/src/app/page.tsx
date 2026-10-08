@@ -1323,16 +1323,33 @@ export default function Home() {
   // typed after generating shows "no clue" until "Sync Clues" is clicked.
   function clueFor(word: PlacedWord): string {
     const answer = word.answer.toUpperCase();
-    // When the same answer is placed more than once (e.g. two ALHAMBRAs with
-    // different clues), the clue list — which is keyed by answer — can't tell
-    // them apart, so trust the word's own clue snapshot for that position.
-    const placedTwice =
-      (result?.placedWords.filter((w) => w.answer.toUpperCase() === answer).length ?? 0) > 1;
-    if (!placedTwice) {
+    const placements = (result?.placedWords || []).filter(
+      (w) => w.answer.toUpperCase() === answer
+    );
+    if (placements.length <= 1) {
+      // Unique answer: read the clue live from the input-panel list.
       for (const c of clues) {
         if (c.answer.trim().toUpperCase() === answer && c.clue.trim()) return c.clue;
       }
+      return word.clue || "";
     }
+    // Repeated answer (e.g. two ALHAMBRAs, three ELs): the answer-keyed clue
+    // list can't disambiguate, but we CAN pair by occurrence — the k-th
+    // placement to the k-th clue row for that answer, using the same ordering
+    // the clue panel's numbering uses. This reads each occurrence's clue LIVE
+    // from the input list, so a clue typed after the last "Capture" shows up
+    // immediately instead of staying "no clue yet" until you re-capture.
+    const ordered = [...placements].sort(
+      (a, b) =>
+        (a.direction === b.direction ? 0 : a.direction === "across" ? -1 : 1) ||
+        a.number - b.number
+    );
+    const idx = ordered.findIndex(
+      (w) => w.number === word.number && w.direction === word.direction
+    );
+    const rowsForAnswer = clues.filter((c) => c.answer.trim().toUpperCase() === answer);
+    const paired = idx >= 0 ? rowsForAnswer[idx] : undefined;
+    if (paired && paired.clue.trim()) return paired.clue;
     return word.clue || "";
   }
 
