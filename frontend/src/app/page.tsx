@@ -49,6 +49,7 @@ interface DraftState {
   savedAt: string;
   puzzleTitle: string;
   puzzleByline: string;
+  storedDate?: string;
   currentPuzzleId: string | null;
   clues: ClueEntry[];
   result: CrosswordResult | null;
@@ -131,6 +132,12 @@ function formatDate(date: Date): string {
     day: "numeric",
   });
 }
+
+// The subhead date can be AUTO (always today) or a fixed MANUAL string the user
+// types (a date, or any text). We persist the choice in the existing `date`
+// column with no schema change: auto is stored as this sentinel so a reopened
+// puzzle stays on "today"; anything else is treated as a literal manual value.
+const AUTO_DATE_TOKEN = "__auto__";
 
 // Scan a grid for words (sequences of 2+ letters) and return them as PlacedWord[]
 function detectWords(
@@ -292,7 +299,31 @@ export default function Home() {
   const [puzzleTitle, setPuzzleTitle] = useState("");
   const [puzzleByline, setPuzzleByline] = useState("");
   const [currentPuzzleId, setCurrentPuzzleId] = useState<string | null>(null);
-  const [puzzleDate] = useState(formatDate(new Date()));
+  // Subhead date: auto (today) by default, or a manual free-text value.
+  const [autoDate, setAutoDate] = useState(true);
+  const [manualDate, setManualDate] = useState("");
+  // What actually prints / previews in the subhead.
+  const puzzleDate = autoDate ? formatDate(new Date()) : manualDate.trim();
+  // What we persist (sentinel for auto so a reopened puzzle stays on "today").
+  const storedDate = autoDate ? AUTO_DATE_TOKEN : manualDate.trim();
+  // The exact subhead line printed under the title (byline // date). Kept as one
+  // source of truth so the on-screen preview matches the PDF character-for-char.
+  const subheadLine = [puzzleByline.trim(), puzzleDate].filter(Boolean).join("  //  ");
+  // Human-readable date for the saved-puzzle list (auto sentinel → today).
+  function displayStoredDate(stored?: string | null): string {
+    if (!stored || stored === AUTO_DATE_TOKEN) return formatDate(new Date());
+    return stored;
+  }
+  // Decode a stored `date` value back into the auto/manual toggle on load.
+  function applyStoredDate(stored?: string | null) {
+    if (!stored || stored === AUTO_DATE_TOKEN) {
+      setAutoDate(true);
+      setManualDate("");
+    } else {
+      setAutoDate(false);
+      setManualDate(stored);
+    }
+  }
   const [result, setResult] = useState<CrosswordResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -497,6 +528,7 @@ export default function Home() {
     const currentContent = JSON.stringify([
       puzzleTitle,
       puzzleByline,
+      storedDate,
       clues,
       result,
       manualGrid,
@@ -533,6 +565,7 @@ export default function Home() {
         savedAt: new Date().toISOString(),
         puzzleTitle,
         puzzleByline,
+        storedDate,
         currentPuzzleId,
         clues,
         result,
@@ -555,6 +588,7 @@ export default function Home() {
   }, [
     puzzleTitle,
     puzzleByline,
+    storedDate,
     currentPuzzleId,
     clues,
     result,
@@ -580,6 +614,7 @@ export default function Home() {
     const currentContent = JSON.stringify([
       puzzleTitle,
       puzzleByline,
+      storedDate,
       clues,
       result,
       manualGrid,
@@ -606,6 +641,7 @@ export default function Home() {
     isSignedIn,
     puzzleTitle,
     puzzleByline,
+    storedDate,
     currentPuzzleId,
     clues,
     result,
@@ -632,6 +668,7 @@ export default function Home() {
     if (!d) return;
     setPuzzleTitle(d.puzzleTitle || "");
     setPuzzleByline(d.puzzleByline || "");
+    applyStoredDate(d.storedDate);
     setCurrentPuzzleId(d.currentPuzzleId ?? null);
     setClues(d.clues && d.clues.length ? d.clues : [{ answer: "", clue: "" }]);
     setResult(d.result || null);
@@ -933,6 +970,7 @@ export default function Home() {
   }) {
     setPuzzleTitle(p.title || "");
     setPuzzleByline(p.byline || "");
+    applyStoredDate(undefined); // fresh import defaults to the auto (today) date
     setCurrentPuzzleId(null); // treat as a new puzzle; Save will insert it
     setClues(p.clues && p.clues.length ? p.clues : [{ answer: "", clue: "" }]);
     setResult(p.result);
@@ -1471,7 +1509,7 @@ export default function Home() {
             id: currentPuzzleId || undefined,
             title: puzzleTitle || "Untitled Puzzle",
             byline: puzzleByline,
-            date: puzzleDate,
+            date: storedDate,
             clues,
             result,
             manualGrid: manualGrid.length > 0 ? manualGrid : null,
@@ -1515,7 +1553,7 @@ export default function Home() {
         id: Date.now().toString(),
         title: puzzleTitle || "Untitled Puzzle",
         byline: puzzleByline,
-        date: puzzleDate,
+        date: storedDate,
         clues,
         result,
         savedAt: new Date().toISOString(),
@@ -1550,6 +1588,8 @@ export default function Home() {
   function clearEditor() {
     setPuzzleTitle("");
     setPuzzleByline("");
+    setAutoDate(true);
+    setManualDate("");
     setClues([{ answer: "", clue: "" }]);
     setResult(null);
     setCurrentPuzzleId(null);
@@ -1620,6 +1660,7 @@ export default function Home() {
         if (full.error) throw new Error(full.error);
         setPuzzleTitle(full.title);
         setPuzzleByline(full.byline || "");
+        applyStoredDate(full.date);
         setClues(full.clues || []);
         setResult(full.result || null);
         setCurrentPuzzleId(full.id);
@@ -1640,6 +1681,7 @@ export default function Home() {
       // Load from localStorage object
       setPuzzleTitle(puzzle.title);
       setPuzzleByline(puzzle.byline || "");
+      applyStoredDate(puzzle.date);
       setClues(puzzle.clues);
       setResult(puzzle.result);
       setCurrentPuzzleId(null);
@@ -1801,7 +1843,7 @@ export default function Home() {
     pdf.setFont(bylineFont, "normal");
     pdf.setFontSize(9);
     pdf.setTextColor(80);
-    pdf.text(`${puzzleByline}  //  ${puzzleDate}`, margin, y);
+    pdf.text(subheadLine, margin, y);
     pdf.setTextColor(0);
     y += 10;
     // Hidden message note above grid
@@ -2074,7 +2116,7 @@ export default function Home() {
       pdf.setFont(bylineFont, "normal");
       pdf.setFontSize(9);
       pdf.setTextColor(80);
-      pdf.text(`${puzzleByline}  //  ${puzzleDate}`, margin, y);
+      pdf.text(subheadLine, margin, y);
       pdf.setTextColor(0);
       y += 8; // tighter gap below the byline (was 14) — reclaimed for the top
       return y;
@@ -2103,15 +2145,24 @@ export default function Home() {
 
     const cols = result.size.cols;
     const rows = result.size.rows;
-    // Fill the page — constrained by whichever dimension hits the margin first
-    const largeCellSize = Math.floor(Math.min(usable / cols, (bottomLimit - y) / rows));
+    // The grid lives on its own page here, so maximize it to fill the area left
+    // below the header (square cells, so the tighter of width/height wins), then
+    // CENTER it in both axes rather than anchoring top-left. For a tall grid the
+    // height binds (as tall as possible) and the leftover width splits evenly
+    // (centered horizontally); for a wide grid it's the reverse.
+    const gridAreaTop = y;
+    const gridAvailW = usable;
+    const gridAvailH = bottomLimit - gridAreaTop;
+    const largeCellSize = Math.floor(Math.min(gridAvailW / cols, gridAvailH / rows));
     const gridW = largeCellSize * cols;
-    const gridX = margin;
+    const gridH = largeCellSize * rows;
+    const gridX = margin + (gridAvailW - gridW) / 2;
+    const gridY = gridAreaTop + (gridAvailH - gridH) / 2;
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cx = gridX + c * largeCellSize;
-        const cy = y + r * largeCellSize;
+        const cy = gridY + r * largeCellSize;
         const cell = result.grid[r][c];
         if (cell === null) {
           pdf.setFillColor(0, 0, 0);
@@ -2164,10 +2215,10 @@ export default function Home() {
       }
     }
     pdf.setLineWidth(0.375);
-    pdf.rect(gridX, y, gridW, largeCellSize * rows, "S");
+    pdf.rect(gridX, gridY, gridW, gridH, "S");
 
     // Attribution
-    const largeGridBottom = y + largeCellSize * rows;
+    const largeGridBottom = gridY + gridH;
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(5);
     pdf.setTextColor(150);
@@ -2646,6 +2697,8 @@ export default function Home() {
                         pushUndo("new puzzle");
                         setPuzzleTitle("");
                         setPuzzleByline("");
+                        setAutoDate(true);
+                        setManualDate("");
                         setClues([{ answer: "", clue: "" }]);
                         setResult(null);
                         setCurrentPuzzleId(null);
@@ -2685,12 +2738,54 @@ export default function Home() {
             />
             <input
               type="text"
-              placeholder={`e.g. by Jonathan Shambroom // ${puzzleDate}`}
+              placeholder="e.g. by Jonathan Shambroom"
               value={puzzleByline}
               onChange={(e) => setPuzzleByline(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border-b border-gray-200 bg-transparent focus:outline-none focus:border-gray-400 transition mt-1"
               style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
             />
+
+            {/* Subhead date — auto (today) or a fixed manual value */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3">
+              <label
+                className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                <input
+                  type="checkbox"
+                  checked={autoDate}
+                  onChange={(e) => setAutoDate(e.target.checked)}
+                  className="accent-black"
+                />
+                Use today&apos;s date automatically
+              </label>
+              {!autoDate && (
+                <input
+                  type="text"
+                  placeholder="e.g. October 18, 2026"
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  className="flex-1 min-w-[150px] px-2 py-1 text-sm border-b border-gray-200 bg-transparent focus:outline-none focus:border-gray-400 transition"
+                  style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                />
+              )}
+            </div>
+
+            {/* Live subhead preview — exactly what prints under the title */}
+            {subheadLine && (
+              <p
+                className="mt-2 px-3 text-xs text-gray-400"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                Prints as:{" "}
+                <span
+                  className="text-gray-700"
+                  style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                >
+                  {subheadLine}
+                </span>
+              </p>
+            )}
           </div>
 
           {/* Library / home — actions NOT tied to the current puzzle */}
@@ -2742,7 +2837,7 @@ export default function Home() {
                     >
                       <span className="text-sm font-medium">{p.title}</span>
                       <span className="text-xs text-gray-400 ml-2">
-                        {p.date}
+                        {displayStoredDate(p.date)}
                       </span>
                     </button>
                     <div className="flex items-center gap-2 ml-2 shrink-0">
@@ -3294,28 +3389,30 @@ export default function Home() {
               {mode === "manual" ? (
                 /* ===== MANUAL MODE GRID ===== */
                 <div>
+                  {/* Header preview — laid out to mirror the printed PDF: title
+                      on its own line, then the "byline // date" subhead. */}
                   <div className="mb-4">
-                    <div className="flex items-baseline gap-3">
-                      {puzzleTitle && (
-                        <h2
-                          className="text-2xl font-bold"
-                          style={{ fontFamily: FONT_HEADING }}
-                        >
-                          {puzzleTitle}
-                        </h2>
-                      )}
-                      <span
-                        className="text-sm text-gray-600"
-                        style={{ fontFamily: FONT_BODY }}
+                    {puzzleTitle && (
+                      <h2
+                        className="text-2xl font-bold"
+                        style={{ fontFamily: FONT_HEADING }}
                       >
-                        {puzzleByline}
-                      </span>
-                    </div>
+                        {puzzleTitle}
+                      </h2>
+                    )}
+                    {subheadLine && (
+                      <p
+                        className="text-sm text-gray-600 mt-0.5"
+                        style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                      >
+                        {subheadLine}
+                      </p>
+                    )}
                     <p
-                      className="text-sm text-gray-500 mt-0.5"
+                      className="text-xs text-gray-400 mt-0.5"
                       style={{ fontFamily: FONT_BODY }}
                     >
-                      {puzzleDate} &middot; {clueCountLabel}
+                      {clueCountLabel}
                     </p>
                   </div>
 
@@ -3542,28 +3639,30 @@ export default function Home() {
                 /* ===== AUTO MODE (printable) ===== */
                 <div>
                   <div ref={printRef} style={{ background: "#fff", padding: "24px" }}>
+                    {/* Header preview — mirrors the printed PDF: title line, then
+                        the "byline // date" subhead. */}
                     <div className="mb-4">
-                      <div className="flex items-baseline gap-3">
-                        {puzzleTitle && (
-                          <h2
-                            className="text-2xl font-bold"
-                            style={{ fontFamily: FONT_HEADING }}
-                          >
-                            {puzzleTitle}
-                          </h2>
-                        )}
-                        <span
-                          className="text-sm text-gray-600"
-                          style={{ fontFamily: FONT_BODY }}
+                      {puzzleTitle && (
+                        <h2
+                          className="text-2xl font-bold"
+                          style={{ fontFamily: FONT_HEADING }}
                         >
-                          by Jonathan Shambroom
-                        </span>
-                      </div>
+                          {puzzleTitle}
+                        </h2>
+                      )}
+                      {subheadLine && (
+                        <p
+                          className="text-sm text-gray-600 mt-0.5"
+                          style={{ fontFamily: "'Montserrat', 'Libre Franklin', system-ui, sans-serif" }}
+                        >
+                          {subheadLine}
+                        </p>
+                      )}
                       <p
-                        className="text-sm text-gray-500 mt-0.5"
+                        className="text-xs text-gray-400 mt-0.5"
                         style={{ fontFamily: FONT_BODY }}
                       >
-                        {puzzleDate} &middot; {clueCountLabel}
+                        {clueCountLabel}
                       </p>
                     </div>
 
