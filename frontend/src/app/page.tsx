@@ -2139,42 +2139,55 @@ export default function Home() {
       return y;
     }
 
-    // === PAGE 1: Header + Large Grid ===
-    // Start the title lower so it clears the printer's non-printable top edge.
-    // The 6pt reclaimed from the byline gap above is added here, so the grid's
-    // top (and therefore the bottom) stays exactly where it was.
-    let y = drawHeader(margin + 24);
+    // === PAGE 1: Large grid on its own page ===
+    // Tight, equal margins on the sides and bottom so the grid is as large as
+    // possible with minimal surrounding whitespace. The header (title + byline)
+    // sits top-left; the hidden-message note is tucked right-aligned just above
+    // the grid so it costs almost no vertical space.
+    const gridMargin = 18; // 0.25in — printer-safe and tighter than the text pages
+    const gridUsable = pw - gridMargin * 2;
+    const gridBottom = ph - gridMargin;
 
-    if (hiddenMessageCells.length > 0) {
-      // Keep the note ADJACENT to the grid: the reclaimed whitespace sits above
-      // the note (below the byline), and the note hugs the grid. Grid top (and
-      // therefore the bottom) is unchanged.
-      y += 8; // whitespace below the byline
-      pdf.setFont(bylineFont, "normal"); // match the byline sub-headline font
-      pdf.setFontSize(7);
-      pdf.setTextColor(80);
-      pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
-      pdf.setTextColor(0);
-      y += 4; // small gap — note sits just above the grid
-    } else {
-      y += 10; // breathing room before the grid
+    let hy = gridMargin + 16; // title baseline, clearing the non-printable top edge
+    if (puzzleTitle) {
+      pdf.setFont("times", "bold");
+      pdf.setFontSize(20);
+      pdf.text(puzzleTitle, gridMargin, hy);
+      hy += 15;
     }
+    pdf.setFont(bylineFont, "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(80);
+    pdf.text(subheadLine, gridMargin, hy);
+    pdf.setTextColor(0);
 
     const cols = result.size.cols;
     const rows = result.size.rows;
-    // The grid lives on its own page here, so maximize it to fill the area left
-    // below the header (square cells, so the tighter of width/height wins), then
-    // CENTER it in both axes rather than anchoring top-left. For a tall grid the
-    // height binds (as tall as possible) and the leftover width splits evenly
-    // (centered horizontally); for a wide grid it's the reverse.
-    const gridAreaTop = y;
-    const gridAvailW = usable;
-    const gridAvailH = bottomLimit - gridAreaTop;
+    // Reserve a thin band above the grid for the right-aligned note so it hugs
+    // the grid's top edge instead of pushing the grid down.
+    const noteBand = hiddenMessageCells.length > 0 ? 11 : 0;
+    const gridAreaTop = hy + 6 + noteBand;
+    const gridAvailW = gridUsable;
+    const gridAvailH = gridBottom - gridAreaTop;
     const largeCellSize = Math.floor(Math.min(gridAvailW / cols, gridAvailH / rows));
     const gridW = largeCellSize * cols;
     const gridH = largeCellSize * rows;
-    const gridX = margin + (gridAvailW - gridW) / 2;
-    const gridY = gridAreaTop + (gridAvailH - gridH) / 2;
+    const gridX = gridMargin + (gridAvailW - gridW) / 2; // centered → equal L/R margins
+    const gridY = gridBottom - gridH; // bottom-aligned → bottom margin == gridMargin
+
+    // Hidden-message note: right-aligned to the grid's right edge, just above it.
+    if (hiddenMessageCells.length > 0) {
+      pdf.setFont(bylineFont, "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(80);
+      pdf.text(
+        "The circled letters spell a hidden message when read left to right.",
+        gridX + gridW,
+        gridY - 4,
+        { align: "right" }
+      );
+      pdf.setTextColor(0);
+    }
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -2363,7 +2376,7 @@ export default function Home() {
     pdf.addPage();
     // Nudge only the title/byline down so the title clears the top edge, and let
     // the clues start right below the byline (tight) so they keep their size.
-    y = drawHeader(margin + 16);
+    let y = drawHeader(margin + 16);
 
     const colGap = 16;
     const colWidth = (usable - colGap) / 2;
