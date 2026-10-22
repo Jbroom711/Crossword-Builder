@@ -13,6 +13,28 @@ FRONTEND="$ROOT/frontend"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 FRONTEND_PORT="${FRONTEND_PORT:-3030}"
 
+# --- production-only reminder ----------------------------------------------
+# Jonathan has chosen to do all real work in PRODUCTION (crosswordbuilderjsham.com),
+# not locally. Running locally signs into a SEPARATE (dev) Clerk identity, and the
+# Supabase anon key is blocked by RLS — so your real cloud puzzles won't appear
+# here and cloud save/load won't work. Nothing done locally can touch production
+# data. Set SKIP_LOCAL_WARNING=1 to bypass this prompt (used for automated tests).
+if [ -z "${SKIP_LOCAL_WARNING:-}" ]; then
+  echo "────────────────────────────────────────────────────────────────────"
+  echo " ⚠  You chose to work only in PRODUCTION:"
+  echo "       https://crosswordbuilderjsham.com"
+  echo ""
+  echo "    Local is a separate sandbox: your real puzzles won't show here and"
+  echo "    cloud save/load won't work (dev Clerk identity + RLS-blocked key)."
+  echo "    It cannot affect production data."
+  echo "────────────────────────────────────────────────────────────────────"
+  read -r -p " Run locally anyway? [y/N] " _ans || _ans=""
+  case "$_ans" in
+    [Yy]*) echo " Continuing locally..." ;;
+    *) echo " Cancelled — open https://crosswordbuilderjsham.com instead."; exit 0 ;;
+  esac
+fi
+
 # --- sanity checks ---------------------------------------------------------
 if [ ! -x "$BACKEND/venv/bin/uvicorn" ]; then
   echo "ERROR: backend virtualenv not found at $BACKEND/venv."
