@@ -836,21 +836,42 @@ export default function Home() {
     if (clues.length <= 1) return;
     pushUndo("delete clue");
     const removedAnswer = clues[index].answer.trim().toUpperCase();
-    const removedClueText = clues[index].clue.trim();
     let newClues = clues.filter((_, i) => i !== index);
 
-    // If that answer is currently placed in the grid, remove exactly ONE matching
-    // placement — the one whose clue matches this row — so deleting one of a pair
-    // of repeated answers (e.g. two ALHAMBRAs) keeps the other. Otherwise the
-    // removed word's cells would linger as orphaned boxes in Automatic mode.
+    // If that answer is currently placed in the grid, remove exactly the ONE
+    // placement that THIS clue row maps to, so deleting one of a pair of repeated
+    // answers keeps the other — even when both copies share the same clue text
+    // (which is what "Capture" does to a newly-added duplicate). We pair rows to
+    // placements the SAME way the clue panel numbers them: the k-th row of an
+    // answer ↔ its k-th placement in across-first, numbered order. Matching by
+    // clue text (the old approach) couldn't tell identical duplicates apart.
     if (result && removedAnswer) {
       const placed = result.placedWords;
-      let idx = placed.findIndex(
-        (w) => w.answer.toUpperCase() === removedAnswer && (w.clue || "").trim() === removedClueText
-      );
-      if (idx < 0) idx = placed.findIndex((w) => w.answer.toUpperCase() === removedAnswer);
-      if (idx >= 0) {
-        const remaining = placed.filter((_, i) => i !== idx);
+      const byAnswer = new Map<string, PlacedWord[]>();
+      for (const w of [...placed].sort(
+        (a, b) =>
+          (a.direction === b.direction ? 0 : a.direction === "across" ? -1 : 1) ||
+          a.number - b.number
+      )) {
+        const a = w.answer.toUpperCase();
+        if (!byAnswer.has(a)) byAnswer.set(a, []);
+        byAnswer.get(a)!.push(w);
+      }
+      const used = new Map<string, number>();
+      let target: PlacedWord | undefined;
+      for (let i = 0; i < clues.length; i++) {
+        const a = clues[i].answer.trim().toUpperCase();
+        if (!a) continue;
+        const list = byAnswer.get(a);
+        if (!list) continue;
+        const k = used.get(a) || 0;
+        if (list[k]) {
+          if (i === index) target = list[k];
+          used.set(a, k + 1);
+        }
+      }
+      if (target) {
+        const remaining = placed.filter((w) => w !== target);
         const rebuilt = buildResultFromPlacedWords(remaining);
         if (rebuilt) {
           setResult(rebuilt.result);
