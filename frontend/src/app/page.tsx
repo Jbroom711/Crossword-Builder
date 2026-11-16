@@ -2114,9 +2114,23 @@ export default function Home() {
 
   async function exportLarge(showAnswers = false, splitCluePages = false) {
     if (!result) return;
-    const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+    // Orient the grid's OWN page in landscape when the grid is wider than tall,
+    // so a landscape puzzle fills the sheet instead of being squeezed portrait.
+    // The clue/text pages always stay portrait (columns read better that way).
+    const cols = result.size.cols;
+    const rows = result.size.rows;
+    const gridLandscape = cols > rows;
+    const pdf = new jsPDF({
+      orientation: gridLandscape ? "landscape" : "portrait",
+      unit: "pt",
+      format: "letter",
+    });
+    // Portrait dims for the clue/text pages …
     const pw = 612;
     const ph = 792;
+    // … and the grid-page dims (swapped when that page is landscape).
+    const gpw = gridLandscape ? 792 : 612;
+    const gph = gridLandscape ? 612 : 792;
     const margin = 21.6;
     const usable = pw - margin * 2;
     const bottomLimit = ph - margin;
@@ -2166,8 +2180,8 @@ export default function Home() {
     // sits top-left; the hidden-message note is tucked right-aligned just above
     // the grid so it costs almost no vertical space.
     const gridMargin = 18; // 0.25in — printer-safe and tighter than the text pages
-    const gridUsable = pw - gridMargin * 2;
-    const gridBottom = ph - gridMargin;
+    const gridUsable = gpw - gridMargin * 2;
+    const gridBottom = gph - gridMargin;
 
     let hy = gridMargin + 16; // title baseline, clearing the non-printable top edge
     if (puzzleTitle) {
@@ -2182,8 +2196,6 @@ export default function Home() {
     pdf.text(subheadLine, gridMargin, hy);
     pdf.setTextColor(0);
 
-    const cols = result.size.cols;
-    const rows = result.size.rows;
     // Reserve a thin band above the grid for the right-aligned note so it hugs
     // the grid's top edge instead of pushing the grid down.
     const noteBand = hiddenMessageCells.length > 0 ? 11 : 0;
@@ -2295,7 +2307,7 @@ export default function Home() {
     // Down on its own page — two columns each, text sized as large as possible
     // to fill the page so the clues are easy to read.
     function drawDirectionPage(title: string, clueList: PlacedWord[]) {
-      pdf.addPage();
+      pdf.addPage("letter", "portrait"); // clue pages are always portrait
       let yy = drawHeader(margin + 16);
       yy += 4 + 16; // full blank line between the byline and the direction heading
       pdf.setFont("times", "bold");
@@ -2394,7 +2406,7 @@ export default function Home() {
     }
 
     // === PAGE 2: Header + Two-column clues (Across + Down together) ===
-    pdf.addPage();
+    pdf.addPage("letter", "portrait"); // clue page is always portrait
     // Nudge only the title/byline down so the title clears the top edge, and let
     // the clues start right below the byline (tight) so they keep their size.
     let y = drawHeader(margin + 16);
