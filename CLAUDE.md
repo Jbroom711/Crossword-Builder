@@ -76,6 +76,12 @@ This file is the practical working summary.
 
 ## Recent changes (most recent first)
 
+- **Compact PDF title no longer clipped when printed** (2026-11-16): the compact
+  one-page export drew the 20pt title with its baseline at the 0.3in margin, so
+  its letter-tops rose into the printer's non-printable top strip (fine in a PDF
+  viewer, shaved on paper). Now the title baseline starts one ascent (~21pt) below
+  the margin so its TOP sits at ~0.3in. The one-page clue auto-fit absorbs the
+  reclaimed space. `buildPDF`, so it covers Compact Puzzle + Compact Answer Key.
 - **Large grid pages TOP-aligned under the title** (2026-11-16): `exportLarge`
   page-1 grid now hugs the header (`gridY = gridAreaTop`) with any vertical slack
   falling to the bottom, instead of being bottom-aligned. Applies to Large Puzzle,

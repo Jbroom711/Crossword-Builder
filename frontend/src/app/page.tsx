@@ -1866,7 +1866,14 @@ export default function Home() {
     const margin = 21.6; // 0.3in
     const usable = pw - margin * 2;
     const bottomLimit = ph - margin;
-    let y = margin;
+    // jsPDF anchors text at its baseline, so a 20pt title drawn at y=margin would
+    // have its LETTER TOPS rise ~14pt above the margin line — into most printers'
+    // non-printable top strip, which shaved the title when printed (PDF looked
+    // fine). Start the baseline one title-ascent below the margin so the title's
+    // TOP sits at the margin (~0.3in), matching the large-export header. The
+    // one-page clue auto-fit below absorbs the few reclaimed points.
+    const titleAscent = 21; // measured glyph ascent of the 20pt Times-bold title
+    let y = margin + titleAscent;
 
     // Title
     if (puzzleTitle) {
