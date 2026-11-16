@@ -76,6 +76,21 @@ This file is the practical working summary.
 
 ## Recent changes (most recent first)
 
+- **Large grid pages TOP-aligned under the title** (2026-11-16): `exportLarge`
+  page-1 grid now hugs the header (`gridY = gridAreaTop`) with any vertical slack
+  falling to the bottom, instead of being bottom-aligned. Applies to Large Puzzle,
+  Large Answer Key, and the 3-page split (shared code). Jonathan asked for this on
+  the Matty 50th answer key; verified top-aligned on both the key and empty puzzle.
+- **Landscape grid page for wide puzzles** (`820527e`): when the grid is wider
+  than tall (`cols > rows`), `exportLarge` orients the grid's OWN page landscape
+  (792×612) so a wide puzzle fills the sheet; clue pages stay portrait. Applies to
+  BOTH Large Puzzle and Large Answer Key (same page-1 code path) — kept consistent.
+  Square/portrait grids unchanged. Verified on Uncle Sam (grid ~1.37× wider).
+  **Gotcha:** this first "looked broken" to Jonathan — the live prod build was
+  correct (confirmed via the `app-build` marker) and a headless export produced
+  landscape; the real cause was a **stale browser bundle**, fixed by a hard refresh.
+- **Duplicate-answer delete fix** (`28dafe3`): deleting one of two identical answers
+  now removes exactly the placement that row maps to (occurrence-pairing), not both.
 - **Production-only workflow** + `start.sh` reminder guard (2026-10-22).
 - **`middleware.ts` → `proxy.ts`** rename for Next 16 (commit `cd2589e`).
 - **Supabase hardening**: service_role key + `server-only` guard + RLS enabled

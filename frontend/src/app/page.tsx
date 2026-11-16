@@ -2175,10 +2175,11 @@ export default function Home() {
     }
 
     // === PAGE 1: Large grid on its own page ===
-    // Tight, equal margins on the sides and bottom so the grid is as large as
-    // possible with minimal surrounding whitespace. The header (title + byline)
-    // sits top-left; the hidden-message note is tucked right-aligned just above
-    // the grid so it costs almost no vertical space.
+    // Tight, equal side margins so the grid is as large as possible with minimal
+    // surrounding whitespace. The header (title + byline) sits top-left and the
+    // grid is TOP-aligned directly beneath it (any vertical slack falls to the
+    // bottom of the page). The hidden-message note is tucked right-aligned just
+    // above the grid so it costs almost no vertical space.
     const gridMargin = 18; // 0.25in — printer-safe and tighter than the text pages
     const gridUsable = gpw - gridMargin * 2;
     const gridBottom = gph - gridMargin;
@@ -2206,7 +2207,7 @@ export default function Home() {
     const gridW = largeCellSize * cols;
     const gridH = largeCellSize * rows;
     const gridX = gridMargin + (gridAvailW - gridW) / 2; // centered → equal L/R margins
-    const gridY = gridBottom - gridH; // bottom-aligned → bottom margin == gridMargin
+    const gridY = gridAreaTop; // top-aligned → grid hugs the title; slack falls to the bottom
 
     // Hidden-message note: right-aligned to the grid's right edge, just above it.
     if (hiddenMessageCells.length > 0) {
