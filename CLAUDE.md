@@ -76,6 +76,15 @@ This file is the practical working summary.
 
 ## Recent changes (most recent first)
 
+- **Hidden message: direction toggle + auto "stripes"** (2026-11-17): the circled
+  letters now read in a chosen direction — Left→Right (default) or Right→Left
+  (Hebrew-style, e.g. Uncle Sam) — via a toggle in the Hidden Message panel. Multi-
+  row messages auto-read as "stripes": top row-band to bottom, each row in the
+  chosen direction (for Cole's message laid out at different heights). Order is
+  derived from cell positions (`orderedHiddenCells`), nothing new stored except one
+  `hiddenMessageRTL` bit, which is **packed into the existing `hidden_message_cells`
+  jsonb** as `{cells, rtl}` (no DB schema change; plain-array rows stay LTR). The
+  editor preview, on-screen note, and both PDF notes all adapt via `hiddenMessageNote()`.
 - **Compact PDF title no longer clipped when printed** (2026-11-16): the compact
   one-page export drew the 20pt title with its baseline at the 0.3in margin, so
   its letter-tops rose into the printer's non-printable top strip (fine in a PDF

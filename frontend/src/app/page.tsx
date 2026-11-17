@@ -59,6 +59,7 @@ interface DraftState {
   hiddenMessageMode: boolean;
   hiddenMessageCells: { r: number; c: number }[];
   hiddenMessageText: string;
+  hiddenMessageRTL?: boolean;
 }
 
 const DRAFT_KEY = "crossword_draft";
@@ -366,6 +367,10 @@ export default function Home() {
   const [hiddenMessageMode, setHiddenMessageMode] = useState(false);
   const [hiddenMessageCells, setHiddenMessageCells] = useState<{ r: number; c: number }[]>([]);
   const [hiddenMessageText, setHiddenMessageText] = useState("");
+  // Reading direction for the circled message: false = left-to-right (default),
+  // true = right-to-left (Hebrew-style, e.g. Uncle Sam). Multi-row messages read
+  // as "stripes" (top row to bottom, each row in this direction) automatically.
+  const [hiddenMessageRTL, setHiddenMessageRTL] = useState(false);
 
   // Undo — snapshot the editable state before destructive ops (delete a clue,
   // generate, capture, clear, manual-grid edits) so one click steps back.
@@ -379,6 +384,7 @@ export default function Home() {
     puzzleByline: string;
     hiddenMessageCells: { r: number; c: number }[];
     hiddenMessageText: string;
+    hiddenMessageRTL: boolean;
     label: string;
   };
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
@@ -421,6 +427,7 @@ export default function Home() {
       setPuzzleByline(snap.puzzleByline);
       setHiddenMessageCells(snap.hiddenMessageCells);
       setHiddenMessageText(snap.hiddenMessageText);
+      setHiddenMessageRTL(snap.hiddenMessageRTL);
       setSelectedCell(null);
       return s.slice(0, -1);
     });
@@ -535,6 +542,7 @@ export default function Home() {
       manualGridSize,
       hiddenMessageCells,
       hiddenMessageText,
+      hiddenMessageRTL,
     ]);
 
     // Just loaded or saved a puzzle: adopt the settled state as the saved
@@ -575,6 +583,7 @@ export default function Home() {
         hiddenMessageMode,
         hiddenMessageCells,
         hiddenMessageText,
+        hiddenMessageRTL,
       };
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -598,6 +607,7 @@ export default function Home() {
     hiddenMessageMode,
     hiddenMessageCells,
     hiddenMessageText,
+    hiddenMessageRTL,
     draftToRestore,
   ]);
 
@@ -621,6 +631,7 @@ export default function Home() {
       manualGridSize,
       hiddenMessageCells,
       hiddenMessageText,
+      hiddenMessageRTL,
     ]);
     if (currentContent === savedContentRef.current) return; // nothing new since last save
     if (cloudTimer.current) clearTimeout(cloudTimer.current);
@@ -649,6 +660,7 @@ export default function Home() {
     manualGridSize,
     hiddenMessageCells,
     hiddenMessageText,
+    hiddenMessageRTL,
     draftToRestore,
   ]);
 
@@ -678,6 +690,7 @@ export default function Home() {
     setHiddenMessageMode(!!d.hiddenMessageMode);
     setHiddenMessageCells(d.hiddenMessageCells || []);
     setHiddenMessageText(d.hiddenMessageText || "");
+    setHiddenMessageRTL(!!d.hiddenMessageRTL);
     setDraftToRestore(null);
     // If the restored work belongs to a saved puzzle, treat it as the baseline
     // so it won't keep re-prompting (it's recoverable from Saved anyway).
@@ -701,6 +714,43 @@ export default function Home() {
     } else {
       setHiddenMessageCells([...hiddenMessageCells, { r, c }]);
     }
+  }
+
+  // --- Hidden-message reading order -----------------------------------------
+  // The circled letters are read in "stripes": top row to bottom, and within
+  // each row left-to-right (or right-to-left when hiddenMessageRTL). This makes
+  // a single-row message read straight across, and a multi-row message read
+  // band-by-band — matching how the author laid the words out at different
+  // heights. Nothing about the order is stored; it's derived from cell positions
+  // plus the direction flag.
+  function orderedHiddenCells() {
+    const dir = hiddenMessageRTL ? -1 : 1;
+    return [...hiddenMessageCells].sort((a, b) => a.r - b.r || dir * (a.c - b.c));
+  }
+  // How many distinct rows (stripes) the message spans.
+  function hiddenMessageRowCount() {
+    return new Set(hiddenMessageCells.map((cell) => cell.r)).size;
+  }
+  // The assembled message for the editor preview — a space marks each stripe
+  // break so a multi-row message is legible.
+  function hiddenMessagePreview() {
+    const ordered = orderedHiddenCells();
+    let out = "";
+    let prevR: number | null = null;
+    for (const cell of ordered) {
+      if (prevR !== null && cell.r !== prevR) out += " ";
+      out += result?.grid?.[cell.r]?.[cell.c] || "?";
+      prevR = cell.r;
+    }
+    return out || "—";
+  }
+  // The reading instruction printed under/above the grid in the PDFs.
+  function hiddenMessageNote() {
+    const horizontal = hiddenMessageRTL ? "right to left" : "left to right";
+    if (hiddenMessageRowCount() <= 1) {
+      return `The circled letters spell a hidden message when read ${horizontal}.`;
+    }
+    return `The circled letters spell a hidden message, read in rows top-to-bottom, each ${horizontal}.`;
   }
 
   // Load saved puzzles from API (if signed in) or localStorage (if not)
@@ -1554,6 +1604,7 @@ export default function Home() {
             manualGridSize: manualGrid.length > 0 ? manualGridSize : null,
             hiddenMessageCells,
             hiddenMessageText,
+            hiddenMessageRTL,
           }),
         });
         if (!res.ok) {
@@ -1638,6 +1689,7 @@ export default function Home() {
     setHiddenMessageMode(false);
     setHiddenMessageCells([]);
     setHiddenMessageText("");
+    setHiddenMessageRTL(false);
     setError(null);
     setSaveTimestamp(null);
     setManualChanged(false);
@@ -1708,7 +1760,16 @@ export default function Home() {
         } else if (full.result) {
           buildManualGrid(full.result);
         }
-        setHiddenMessageCells(full.hidden_message_cells || []);
+        // hidden_message_cells is stored as a plain array (LTR) or, to carry the
+        // RTL flag without a DB schema change, as { cells, rtl } (see POST route).
+        const hmRaw = full.hidden_message_cells;
+        if (hmRaw && !Array.isArray(hmRaw) && Array.isArray(hmRaw.cells)) {
+          setHiddenMessageCells(hmRaw.cells);
+          setHiddenMessageRTL(!!hmRaw.rtl);
+        } else {
+          setHiddenMessageCells(Array.isArray(hmRaw) ? hmRaw : []);
+          setHiddenMessageRTL(false);
+        }
         setHiddenMessageText(full.hidden_message_text || "");
         // This freshly-loaded puzzle is the saved baseline — no unsaved changes.
         pendingBaselineRef.current = true;
@@ -1896,7 +1957,7 @@ export default function Home() {
       pdf.setFont(bylineFont, "normal");
       pdf.setFontSize(7);
       pdf.setTextColor(80);
-      pdf.text("The circled letters spell a hidden message when read left to right.", margin, y);
+      pdf.text(hiddenMessageNote(), margin, y);
       pdf.setTextColor(0);
       y += 4;
     }
@@ -2222,7 +2283,7 @@ export default function Home() {
       pdf.setFontSize(7);
       pdf.setTextColor(80);
       pdf.text(
-        "The circled letters spell a hidden message when read left to right.",
+        hiddenMessageNote(),
         gridX + gridW,
         gridY - 4,
         { align: "right" }
@@ -2534,6 +2595,7 @@ export default function Home() {
     puzzleByline,
     hiddenMessageCells,
     hiddenMessageText,
+    hiddenMessageRTL,
   };
 
   // Map each clue-list row to a DISTINCT placed word. For repeated answers
@@ -2794,6 +2856,7 @@ export default function Home() {
                         setHiddenMessageMode(false);
                         setHiddenMessageCells([]);
                         setHiddenMessageText("");
+                        setHiddenMessageRTL(false);
                         setError(null);
                         setSaveTimestamp(null);
                         setManualChanged(false);
@@ -3292,11 +3355,36 @@ export default function Home() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
                       <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
-                        {hiddenMessageCells.length > 0
-                          ? [...hiddenMessageCells].sort((a, b) => a.c - b.c || a.r - b.r).map((cell) => result?.grid?.[cell.r]?.[cell.c] || "?").join("")
-                          : "—"}
+                        {hiddenMessageCells.length > 0 ? hiddenMessagePreview() : "—"}
                       </span>
                     </div>
+                    {/* Reading direction — L→R default, R→L for Hebrew-style messages */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 shrink-0" style={{ fontFamily: FONT_BODY }}>Reads:</span>
+                      <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setHiddenMessageRTL(false)}
+                          className={`px-2 py-1 text-xs font-medium transition ${!hiddenMessageRTL ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                          style={{ fontFamily: FONT_BODY }}
+                        >
+                          Left → Right
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHiddenMessageRTL(true)}
+                          className={`px-2 py-1 text-xs font-medium transition border-l border-gray-300 ${hiddenMessageRTL ? "bg-purple-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                          style={{ fontFamily: FONT_BODY }}
+                        >
+                          Right → Left
+                        </button>
+                      </div>
+                    </div>
+                    {hiddenMessageRowCount() > 1 && (
+                      <p className="text-xs text-purple-600" style={{ fontFamily: FONT_BODY }}>
+                        Reads as {hiddenMessageRowCount()} stripes — top row to bottom, each {hiddenMessageRTL ? "right to left" : "left to right"}.
+                      </p>
+                    )}
                     <input
                       type="text"
                       placeholder="Intended message (optional, for reference)"
@@ -3307,7 +3395,7 @@ export default function Home() {
                     />
                     {hiddenMessageCells.length > 0 && (
                       <button
-                        onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); }}
+                        onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); setHiddenMessageRTL(false); }}
                         className="text-xs text-red-500 hover:text-red-700 transition"
                       >
                         Clear all selections
@@ -3456,15 +3544,40 @@ export default function Home() {
                     </button>
                   </div>
                   <p className="text-xs text-purple-600 mb-2" style={{ fontFamily: FONT_BODY }}>
-                    Click cells to select letters for the hidden message when read left to right, regardless of height. Click again to deselect.
+                    Click cells to circle letters for the hidden message. Click again to deselect. Letters are read {hiddenMessageRTL ? "right to left" : "left to right"}{hiddenMessageRowCount() > 1 ? ", one row-stripe at a time, top to bottom" : ""} — so you can place words at different heights.
                   </p>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-purple-600 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
                     <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
-                      {hiddenMessageCells.length > 0
-                        ? [...hiddenMessageCells].sort((a, b) => a.c - b.c || a.r - b.r).map((cell) => result?.grid?.[cell.r]?.[cell.c] || "?").join("")
-                        : "—"}
+                      {hiddenMessageCells.length > 0 ? hiddenMessagePreview() : "—"}
                     </span>
+                  </div>
+                  {/* Reading direction — L→R default, R→L for Hebrew-style messages */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs text-purple-600 shrink-0" style={{ fontFamily: FONT_BODY }}>Reads:</span>
+                    <div className="inline-flex rounded-md border border-purple-300 overflow-hidden bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setHiddenMessageRTL(false)}
+                        className={`px-2.5 py-1 text-xs font-medium transition ${!hiddenMessageRTL ? "bg-purple-600 text-white" : "text-purple-700 hover:bg-purple-100"}`}
+                        style={{ fontFamily: FONT_BODY }}
+                      >
+                        Left → Right
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHiddenMessageRTL(true)}
+                        className={`px-2.5 py-1 text-xs font-medium transition border-l border-purple-300 ${hiddenMessageRTL ? "bg-purple-600 text-white" : "text-purple-700 hover:bg-purple-100"}`}
+                        style={{ fontFamily: FONT_BODY }}
+                      >
+                        Right → Left
+                      </button>
+                    </div>
+                    {hiddenMessageRowCount() > 1 && (
+                      <span className="text-xs text-purple-500" style={{ fontFamily: FONT_BODY }}>
+                        {hiddenMessageRowCount()} stripes
+                      </span>
+                    )}
                   </div>
                   <input
                     type="text"
@@ -3476,7 +3589,7 @@ export default function Home() {
                   />
                   {hiddenMessageCells.length > 0 && (
                     <button
-                      onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); }}
+                      onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); setHiddenMessageRTL(false); }}
                       className="mt-1 text-xs text-red-500 hover:text-red-700 transition"
                     >
                       Clear all selections
@@ -3547,7 +3660,7 @@ export default function Home() {
                       className="text-xs text-gray-500 mb-2"
                       style={{ fontFamily: FONT_BODY }}
                     >
-                      The circled letters spell a hidden message when read left to right.
+                      {hiddenMessageNote()}
                     </p>
                   )}
 
@@ -3800,7 +3913,7 @@ export default function Home() {
                         className="text-xs text-gray-500 mb-2"
                         style={{ fontFamily: FONT_BODY }}
                       >
-                        The circled letters spell a hidden message when read left to right.
+                        {hiddenMessageNote()}
                       </p>
                     )}
 

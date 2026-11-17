@@ -43,7 +43,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, byline, date, clues, result, manualGrid, manualGridSize, hiddenMessageCells, hiddenMessageText } = body;
+  const { id, title, byline, date, clues, result, manualGrid, manualGridSize, hiddenMessageCells, hiddenMessageText, hiddenMessageRTL } = body;
+  // Pack the RTL flag into the existing jsonb column (no schema change): a plain
+  // array stays LTR (back-compatible with older rows); { cells, rtl } carries RTL.
+  const hiddenMessageCellsCol = hiddenMessageRTL
+    ? { cells: hiddenMessageCells || [], rtl: true }
+    : (hiddenMessageCells || []);
 
   if (id) {
     // Update existing puzzle
@@ -57,7 +62,7 @@ export async function POST(req: NextRequest) {
         result,
         manual_grid: manualGrid || null,
         manual_grid_size: manualGridSize || null,
-        hidden_message_cells: hiddenMessageCells || [],
+        hidden_message_cells: hiddenMessageCellsCol,
         hidden_message_text: hiddenMessageText || "",
         updated_at: new Date().toISOString(),
       })
@@ -83,7 +88,7 @@ export async function POST(req: NextRequest) {
         result,
         manual_grid: manualGrid || null,
         manual_grid_size: manualGridSize || null,
-        hidden_message_cells: hiddenMessageCells || [],
+        hidden_message_cells: hiddenMessageCellsCol,
         hidden_message_text: hiddenMessageText || "",
       })
       .select()
