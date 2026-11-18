@@ -76,6 +76,15 @@ This file is the practical working summary.
 
 ## Recent changes (most recent first)
 
+- **Layout engine packs tighter + squarer** (2026-11-18, BACKEND): two changes in
+  `backend/crossword_engine.py`. (1) Per-word placement breaks overlap ties by
+  compactness — among highest-overlap spots it picks the one that grows the
+  running bounding box least (was a random tie-break). (2) `_quality` now ranks a
+  layout by: most words placed → smallest LONGEST side (avoids ribbons, sets the
+  on-page cell size) → smallest area → most intersections. Restart cap raised so
+  small/medium puzzles use the full 2s budget. Benchmarks: a ~20-word set went
+  29×16/area464 → 16×18/area288 (−38%); a 25-word set went from a 32×13 ribbon to
+  19×19. **Backend deploy is separate and unreliable — force a Railway redeploy.**
 - **Hidden message: click a gap to add/remove a word-space** (2026-11-18): two
   words on the SAME stripe read joined ("IS"+"THE" → "ISTHE") because there's no
   leftward wrap between them. The Message preview is now interactive
