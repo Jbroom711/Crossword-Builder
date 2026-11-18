@@ -9,7 +9,10 @@ Strategy:
    an already-placed letter, so we enumerate exactly those candidate spots
    (fast) and validate each with the conflict checker.
 2. One layout = greedy fill in a (randomised) word order, several passes so
-   later words get a second chance.
+   later words get a second chance. For each word we pick the spot that first
+   maximises letter-overlap, and among equally-overlapping spots the one that
+   grows the running bounding box the LEAST (then a random tie-break). That
+   compactness bias is what keeps the grid tight instead of sprawling.
 3. We build MANY layouts with different random orders / tie-breaking and keep
    the densest one — ranked by (most words placed, then most intersections,
    then smallest bounding-box area). This maximises interweaving and shrinks
@@ -24,7 +27,8 @@ import time
 
 GRID_SIZE = 80          # working grid – trimmed later
 TIME_BUDGET_SEC = 2.0   # wall-clock budget for the multi-restart search
-MAX_ATTEMPTS = 600      # hard cap on layouts tried
+MAX_ATTEMPTS = 4000     # cap on layouts tried (time budget is the usual limiter;
+                        # a high cap lets small/medium puzzles use the full budget)
 SEED = 1234567          # fixed seed -> same answers give the same (dense) grid
 
 
@@ -138,29 +142,55 @@ def _build_layout(entries: list[dict], rng: random.Random):
     _remember(first["answer"], mid, start_col, "across")
     placed.append(PlacedWord(first["answer"], first["clue"], "across", mid, start_col))
 
+    # Running bounding box of everything placed so far: [min_r, max_r, min_c, max_c].
+    # We keep it current so each candidate's "bbox growth" is cheap to evaluate.
+    bbox = [mid, mid, start_col, start_col + len(first["answer"]) - 1]
+
+    def _area(b: list[int]) -> int:
+        return (b[1] - b[0] + 1) * (b[3] - b[2] + 1)
+
     remaining = order[1:]
     for _pass in range(3):
         still_remaining = []
         for entry in remaining:
             word = entry["answer"]
+            length = len(word)
             spots = _candidate_spots(by_char, word)
-            rng.shuffle(spots)  # randomise tie-breaking between equal-overlap spots
-            best = None  # (overlaps, row, col, direction)
+            rng.shuffle(spots)  # randomise tie-breaking between otherwise-equal spots
+            cur_area = _area(bbox)
+            # best = (score, row, col, direction, new_bbox); score = (overlaps, -growth)
+            best = None
             tried = set()
             for (r, c, direction) in spots:
                 key = (r, c, direction)
                 if key in tried:
                     continue
                 tried.add(key)
-                if _can_place(grid, word, r, c, direction, GRID_SIZE):
-                    ov = _score_placement(grid, word, r, c, direction)
-                    if best is None or ov > best[0]:
-                        best = (ov, r, c, direction)
+                if not _can_place(grid, word, r, c, direction, GRID_SIZE):
+                    continue
+                ov = _score_placement(grid, word, r, c, direction)
+                # Bounding box this placement would produce, and how much it grows.
+                if direction == "across":
+                    w_min_r = w_max_r = r
+                    w_min_c, w_max_c = c, c + length - 1
+                else:
+                    w_min_r, w_max_r = r, r + length - 1
+                    w_min_c = w_max_c = c
+                new_bbox = [
+                    min(bbox[0], w_min_r), max(bbox[1], w_max_r),
+                    min(bbox[2], w_min_c), max(bbox[3], w_max_c),
+                ]
+                growth = _area(new_bbox) - cur_area
+                # Prefer more overlaps first, then the tightest-fitting spot.
+                score = (ov, -growth)
+                if best is None or score > best[0]:
+                    best = (score, r, c, direction, new_bbox)
             if best:
-                _, r, c, direction = best
+                _, r, c, direction, new_bbox = best
                 _place(grid, word, r, c, direction)
                 _remember(word, r, c, direction)
                 placed.append(PlacedWord(word, entry["clue"], direction, r, c))
+                bbox = new_bbox
             else:
                 still_remaining.append(entry)
         remaining = still_remaining
@@ -171,14 +201,26 @@ def _build_layout(entries: list[dict], rng: random.Random):
 
 
 def _quality(placed: list[PlacedWord]):
-    """Rank a layout: more words placed, then more intersections, then smaller area."""
+    """Rank a layout for "smallest possible space", best = largest tuple.
+
+    Order of priorities:
+    1. Most words placed  — never drop a word to look tighter.
+    2. Smallest LONGEST side (fewest rows-or-cols, whichever is bigger) — this is
+       what sets the cell size when the grid is scaled onto a page, and it keeps
+       the grid square-ish instead of a tall/wide ribbon.
+    3. Smallest total area — break remaining ties toward the most compact fill.
+    4. Most intersections — among equally small/compact grids, prefer the one
+       whose words interlock the most.
+    """
     if not placed:
-        return (0, 0, 0)
+        return (0, 0, 0, 0)
     min_r = min(p.row for p in placed)
     max_r = max(p.row + (len(p.answer) - 1 if p.direction == "down" else 0) for p in placed)
     min_c = min(p.col for p in placed)
     max_c = max(p.col + (len(p.answer) - 1 if p.direction == "across" else 0) for p in placed)
-    area = (max_r - min_r + 1) * (max_c - min_c + 1)
+    rows = max_r - min_r + 1
+    cols = max_c - min_c + 1
+    area = rows * cols
 
     across_cells = set()
     down_cells = set()
@@ -189,7 +231,7 @@ def _quality(placed: list[PlacedWord]):
             (across_cells if p.direction == "across" else down_cells).add(cell)
     intersections = len(across_cells & down_cells)
 
-    return (len(placed), intersections, -area)
+    return (len(placed), -max(rows, cols), -area, intersections)
 
 
 def generate_crossword(entries: list[dict]) -> dict:
