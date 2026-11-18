@@ -43,11 +43,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, title, byline, date, clues, result, manualGrid, manualGridSize, hiddenMessageCells, hiddenMessageText, hiddenMessageRTL } = body;
-  // Pack the RTL flag into the existing jsonb column (no schema change): a plain
-  // array stays LTR (back-compatible with older rows); { cells, rtl } carries RTL.
-  const hiddenMessageCellsCol = hiddenMessageRTL
-    ? { cells: hiddenMessageCells || [], rtl: true }
+  const { id, title, byline, date, clues, result, manualGrid, manualGridSize, hiddenMessageCells, hiddenMessageText, hiddenMessageRTL, hiddenMessageSpaces } = body;
+  // Pack the RTL flag and manual word-spaces into the existing jsonb column (no
+  // schema change): a plain array stays LTR with no manual spaces (back-compatible
+  // with older rows); { cells, rtl?, spaces? } carries the extras when present.
+  const spaces = Array.isArray(hiddenMessageSpaces) ? hiddenMessageSpaces : [];
+  const hiddenMessageCellsCol = (hiddenMessageRTL || spaces.length > 0)
+    ? { cells: hiddenMessageCells || [], rtl: !!hiddenMessageRTL, spaces }
     : (hiddenMessageCells || []);
 
   if (id) {

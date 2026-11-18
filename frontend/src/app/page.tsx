@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
 import { useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import jsPDF from "jspdf";
 
@@ -60,6 +60,7 @@ interface DraftState {
   hiddenMessageCells: { r: number; c: number }[];
   hiddenMessageText: string;
   hiddenMessageRTL?: boolean;
+  hiddenMessageSpaces?: number[];
 }
 
 const DRAFT_KEY = "crossword_draft";
@@ -371,6 +372,11 @@ export default function Home() {
   // true = right-to-left (Hebrew-style, e.g. Uncle Sam). Multi-row messages read
   // as "stripes" (top row to bottom, each row in this direction) automatically.
   const [hiddenMessageRTL, setHiddenMessageRTL] = useState(false);
+  // Manual word-spaces inside the message: reading-order indices i meaning
+  // "insert a space BETWEEN the i-th and (i+1)-th selected letter" (0-based).
+  // Auto stripe-breaks are separate; this only adds word gaps that have no
+  // leftward wrap to signal them (e.g. two words sitting on the same stripe).
+  const [hiddenMessageSpaces, setHiddenMessageSpaces] = useState<number[]>([]);
 
   // Undo — snapshot the editable state before destructive ops (delete a clue,
   // generate, capture, clear, manual-grid edits) so one click steps back.
@@ -385,6 +391,7 @@ export default function Home() {
     hiddenMessageCells: { r: number; c: number }[];
     hiddenMessageText: string;
     hiddenMessageRTL: boolean;
+    hiddenMessageSpaces: number[];
     label: string;
   };
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
@@ -428,6 +435,7 @@ export default function Home() {
       setHiddenMessageCells(snap.hiddenMessageCells);
       setHiddenMessageText(snap.hiddenMessageText);
       setHiddenMessageRTL(snap.hiddenMessageRTL);
+      setHiddenMessageSpaces(snap.hiddenMessageSpaces);
       setSelectedCell(null);
       return s.slice(0, -1);
     });
@@ -543,6 +551,7 @@ export default function Home() {
       hiddenMessageCells,
       hiddenMessageText,
       hiddenMessageRTL,
+      hiddenMessageSpaces,
     ]);
 
     // Just loaded or saved a puzzle: adopt the settled state as the saved
@@ -584,6 +593,7 @@ export default function Home() {
         hiddenMessageCells,
         hiddenMessageText,
         hiddenMessageRTL,
+        hiddenMessageSpaces,
       };
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -608,6 +618,7 @@ export default function Home() {
     hiddenMessageCells,
     hiddenMessageText,
     hiddenMessageRTL,
+    hiddenMessageSpaces,
     draftToRestore,
   ]);
 
@@ -632,6 +643,7 @@ export default function Home() {
       hiddenMessageCells,
       hiddenMessageText,
       hiddenMessageRTL,
+      hiddenMessageSpaces,
     ]);
     if (currentContent === savedContentRef.current) return; // nothing new since last save
     if (cloudTimer.current) clearTimeout(cloudTimer.current);
@@ -661,6 +673,7 @@ export default function Home() {
     hiddenMessageCells,
     hiddenMessageText,
     hiddenMessageRTL,
+    hiddenMessageSpaces,
     draftToRestore,
   ]);
 
@@ -691,6 +704,7 @@ export default function Home() {
     setHiddenMessageCells(d.hiddenMessageCells || []);
     setHiddenMessageText(d.hiddenMessageText || "");
     setHiddenMessageRTL(!!d.hiddenMessageRTL);
+    setHiddenMessageSpaces(Array.isArray(d.hiddenMessageSpaces) ? d.hiddenMessageSpaces : []);
     setDraftToRestore(null);
     // If the restored work belongs to a saved puzzle, treat it as the baseline
     // so it won't keep re-prompting (it's recoverable from Saved anyway).
@@ -743,17 +757,53 @@ export default function Home() {
     }
     return stripes;
   }
-  // The assembled message for the editor preview — a space marks each carriage
-  // return so a multi-stripe message is legible.
-  function hiddenMessagePreview() {
-    let out = "";
+  // Toggle a manual word-space at reading-order boundary i (between the i-th and
+  // (i+1)-th selected letter). Kept sorted so it's stable to serialize/compare.
+  function toggleHiddenMessageSpace(i: number) {
+    setHiddenMessageSpaces((prev) =>
+      prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort((a, b) => a - b),
+    );
+  }
+  // Interactive editor preview: letters as tiles with a clickable gap between
+  // each pair. A gap that is an auto stripe-break shows a fixed ↵ (structural,
+  // not editable); every other gap is a toggle — click to insert a word-space
+  // (shows a middot you can click again to remove). This is how the author marks
+  // word boundaries that have no leftward wrap to signal them (e.g. "IS" + "THE"
+  // sitting on the same stripe reading as "ISTHE").
+  function renderHiddenMessagePreview(): ReactNode {
+    const cells = hiddenMessageCells;
+    if (cells.length === 0) return "—";
+    const nodes: ReactNode[] = [];
     let prev: { r: number; c: number } | null = null;
-    for (const cell of hiddenMessageCells) {
-      if (startsNewStripe(cell, prev)) out += " ";
-      out += result?.grid?.[cell.r]?.[cell.c] || "?";
+    cells.forEach((cell, idx) => {
+      if (idx > 0) {
+        if (startsNewStripe(cell, prev)) {
+          nodes.push(
+            <span key={`g${idx}`} className="inline-block w-3 text-center text-purple-300" title="Stripe (line) break">↵</span>,
+          );
+        } else {
+          const has = hiddenMessageSpaces.includes(idx - 1);
+          nodes.push(
+            <button
+              key={`g${idx}`}
+              type="button"
+              onClick={() => toggleHiddenMessageSpace(idx - 1)}
+              title={has ? "Remove this space" : "Click to add a space here"}
+              className={
+                has
+                  ? "inline-block align-baseline w-3 rounded hover:bg-red-100 cursor-pointer"
+                  : "inline-block align-baseline w-[3px] hover:w-3 hover:bg-purple-200 rounded cursor-pointer transition-all"
+              }
+            >
+              {has ? " " : "​"}
+            </button>,
+          );
+        }
+      }
+      nodes.push(<span key={`l${idx}`}>{result?.grid?.[cell.r]?.[cell.c] || "?"}</span>);
       prev = cell;
-    }
-    return out || "—";
+    });
+    return <span className="inline items-baseline">{nodes}</span>;
   }
   // The reading instruction printed under/above the grid in the PDFs.
   function hiddenMessageNote() {
@@ -1616,6 +1666,7 @@ export default function Home() {
             hiddenMessageCells,
             hiddenMessageText,
             hiddenMessageRTL,
+            hiddenMessageSpaces,
           }),
         });
         if (!res.ok) {
@@ -1701,6 +1752,7 @@ export default function Home() {
     setHiddenMessageCells([]);
     setHiddenMessageText("");
     setHiddenMessageRTL(false);
+    setHiddenMessageSpaces([]);
     setError(null);
     setSaveTimestamp(null);
     setManualChanged(false);
@@ -1771,15 +1823,18 @@ export default function Home() {
         } else if (full.result) {
           buildManualGrid(full.result);
         }
-        // hidden_message_cells is stored as a plain array (LTR) or, to carry the
-        // RTL flag without a DB schema change, as { cells, rtl } (see POST route).
+        // hidden_message_cells is stored as a plain array (LTR, no manual spaces)
+        // or, to carry the RTL flag and manual word-spaces without a DB schema
+        // change, as { cells, rtl, spaces } (see POST route).
         const hmRaw = full.hidden_message_cells;
         if (hmRaw && !Array.isArray(hmRaw) && Array.isArray(hmRaw.cells)) {
           setHiddenMessageCells(hmRaw.cells);
           setHiddenMessageRTL(!!hmRaw.rtl);
+          setHiddenMessageSpaces(Array.isArray(hmRaw.spaces) ? hmRaw.spaces : []);
         } else {
           setHiddenMessageCells(Array.isArray(hmRaw) ? hmRaw : []);
           setHiddenMessageRTL(false);
+          setHiddenMessageSpaces([]);
         }
         setHiddenMessageText(full.hidden_message_text || "");
         // This freshly-loaded puzzle is the saved baseline — no unsaved changes.
@@ -2607,6 +2662,7 @@ export default function Home() {
     hiddenMessageCells,
     hiddenMessageText,
     hiddenMessageRTL,
+    hiddenMessageSpaces,
   };
 
   // Map each clue-list row to a DISTINCT placed word. For repeated answers
@@ -2868,6 +2924,7 @@ export default function Home() {
                         setHiddenMessageCells([]);
                         setHiddenMessageText("");
                         setHiddenMessageRTL(false);
+                        setHiddenMessageSpaces([]);
                         setError(null);
                         setSaveTimestamp(null);
                         setManualChanged(false);
@@ -3366,7 +3423,7 @@ export default function Home() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-500 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
                       <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
-                        {hiddenMessageCells.length > 0 ? hiddenMessagePreview() : "—"}
+                        {renderHiddenMessagePreview()}
                       </span>
                     </div>
                     {/* Reading direction — L→R default, R→L for Hebrew-style messages */}
@@ -3392,7 +3449,7 @@ export default function Home() {
                       </div>
                     </div>
                     <p className="text-[11px] text-gray-400 leading-snug" style={{ fontFamily: FONT_BODY }}>
-                      Click letters in reading order. A new stripe (line break) starts when you click a cell further {hiddenMessageRTL ? "right" : "left"} than the last — so one line can sit at different heights.
+                      Click letters in reading order. A new stripe (line break) starts when you click a cell further {hiddenMessageRTL ? "right" : "left"} than the last — so one line can sit at different heights. To split two words on the same stripe, click the gap between their letters in the preview above to drop in a space (click the · again to remove it).
                     </p>
                     {hiddenMessageStripeCount() > 1 && (
                       <p className="text-xs text-purple-600" style={{ fontFamily: FONT_BODY }}>
@@ -3409,7 +3466,7 @@ export default function Home() {
                     />
                     {hiddenMessageCells.length > 0 && (
                       <button
-                        onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); setHiddenMessageRTL(false); }}
+                        onClick={() => { setHiddenMessageCells([]); setHiddenMessageText(""); setHiddenMessageRTL(false); setHiddenMessageSpaces([]); }}
                         className="text-xs text-red-500 hover:text-red-700 transition"
                       >
                         Clear all selections
@@ -3558,12 +3615,12 @@ export default function Home() {
                     </button>
                   </div>
                   <p className="text-xs text-purple-600 mb-2" style={{ fontFamily: FONT_BODY }}>
-                    Click cells in reading order to circle letters for the hidden message. Click again to deselect. Letters are read {hiddenMessageRTL ? "right to left" : "left to right"}; a new stripe (line) starts when you click further {hiddenMessageRTL ? "right" : "left"} than the last{hiddenMessageStripeCount() > 1 ? ", top to bottom" : ""} — so you can place words at different heights.
+                    Click cells in reading order to circle letters for the hidden message. Click again to deselect. Letters are read {hiddenMessageRTL ? "right to left" : "left to right"}; a new stripe (line) starts when you click further {hiddenMessageRTL ? "right" : "left"} than the last{hiddenMessageStripeCount() > 1 ? ", top to bottom" : ""} — so you can place words at different heights. Click the gap between two letters in the preview to add a word-space (click the · to remove it).
                   </p>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-purple-600 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
                     <span className="text-sm font-mono font-bold text-purple-700 tracking-widest">
-                      {hiddenMessageCells.length > 0 ? hiddenMessagePreview() : "—"}
+                      {renderHiddenMessagePreview()}
                     </span>
                   </div>
                   {/* Reading direction — L→R default, R→L for Hebrew-style messages */}
