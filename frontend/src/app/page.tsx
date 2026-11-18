@@ -717,40 +717,51 @@ export default function Home() {
   }
 
   // --- Hidden-message reading order -----------------------------------------
-  // The circled letters are read in "stripes": top row to bottom, and within
-  // each row left-to-right (or right-to-left when hiddenMessageRTL). This makes
-  // a single-row message read straight across, and a multi-row message read
-  // band-by-band — matching how the author laid the words out at different
-  // heights. Nothing about the order is stored; it's derived from cell positions
-  // plus the direction flag.
-  function orderedHiddenCells() {
+  // The circled letters are read in SELECTION ORDER — the order the squares were
+  // clicked, which is the message's reading order. A new "stripe" (a carriage
+  // return / new line) begins only when a square sits further LEFT than the
+  // previous one (further RIGHT when hiddenMessageRTL). That lets a single line
+  // weave across different heights and still read as one stripe, and treats the
+  // leftward wrap — not every change of row — as the start of the next line.
+  // Nothing extra is stored; the click order already lives in hiddenMessageCells.
+  function startsNewStripe(
+    cell: { r: number; c: number },
+    prev: { r: number; c: number } | null,
+  ) {
+    if (!prev) return false;
     const dir = hiddenMessageRTL ? -1 : 1;
-    return [...hiddenMessageCells].sort((a, b) => a.r - b.r || dir * (a.c - b.c));
+    return dir * (cell.c - prev.c) < 0;
   }
-  // How many distinct rows (stripes) the message spans.
-  function hiddenMessageRowCount() {
-    return new Set(hiddenMessageCells.map((cell) => cell.r)).size;
+  // How many stripes (lines) the message spans = 1 + number of carriage returns.
+  function hiddenMessageStripeCount() {
+    if (hiddenMessageCells.length === 0) return 0;
+    let stripes = 1;
+    let prev: { r: number; c: number } | null = null;
+    for (const cell of hiddenMessageCells) {
+      if (startsNewStripe(cell, prev)) stripes++;
+      prev = cell;
+    }
+    return stripes;
   }
-  // The assembled message for the editor preview — a space marks each stripe
-  // break so a multi-row message is legible.
+  // The assembled message for the editor preview — a space marks each carriage
+  // return so a multi-stripe message is legible.
   function hiddenMessagePreview() {
-    const ordered = orderedHiddenCells();
     let out = "";
-    let prevR: number | null = null;
-    for (const cell of ordered) {
-      if (prevR !== null && cell.r !== prevR) out += " ";
+    let prev: { r: number; c: number } | null = null;
+    for (const cell of hiddenMessageCells) {
+      if (startsNewStripe(cell, prev)) out += " ";
       out += result?.grid?.[cell.r]?.[cell.c] || "?";
-      prevR = cell.r;
+      prev = cell;
     }
     return out || "—";
   }
   // The reading instruction printed under/above the grid in the PDFs.
   function hiddenMessageNote() {
     const horizontal = hiddenMessageRTL ? "right to left" : "left to right";
-    if (hiddenMessageRowCount() <= 1) {
+    if (hiddenMessageStripeCount() <= 1) {
       return `The circled letters spell a hidden message when read ${horizontal}.`;
     }
-    return `The circled letters spell a hidden message, read in rows top-to-bottom, each ${horizontal}.`;
+    return `The circled letters spell a hidden message, read in stripes top-to-bottom, each ${horizontal}.`;
   }
 
   // Load saved puzzles from API (if signed in) or localStorage (if not)
@@ -3380,9 +3391,12 @@ export default function Home() {
                         </button>
                       </div>
                     </div>
-                    {hiddenMessageRowCount() > 1 && (
+                    <p className="text-[11px] text-gray-400 leading-snug" style={{ fontFamily: FONT_BODY }}>
+                      Click letters in reading order. A new stripe (line break) starts when you click a cell further {hiddenMessageRTL ? "right" : "left"} than the last — so one line can sit at different heights.
+                    </p>
+                    {hiddenMessageStripeCount() > 1 && (
                       <p className="text-xs text-purple-600" style={{ fontFamily: FONT_BODY }}>
-                        Reads as {hiddenMessageRowCount()} stripes — top row to bottom, each {hiddenMessageRTL ? "right to left" : "left to right"}.
+                        Reads as {hiddenMessageStripeCount()} stripes — top to bottom, each {hiddenMessageRTL ? "right to left" : "left to right"}.
                       </p>
                     )}
                     <input
@@ -3544,7 +3558,7 @@ export default function Home() {
                     </button>
                   </div>
                   <p className="text-xs text-purple-600 mb-2" style={{ fontFamily: FONT_BODY }}>
-                    Click cells to circle letters for the hidden message. Click again to deselect. Letters are read {hiddenMessageRTL ? "right to left" : "left to right"}{hiddenMessageRowCount() > 1 ? ", one row-stripe at a time, top to bottom" : ""} — so you can place words at different heights.
+                    Click cells in reading order to circle letters for the hidden message. Click again to deselect. Letters are read {hiddenMessageRTL ? "right to left" : "left to right"}; a new stripe (line) starts when you click further {hiddenMessageRTL ? "right" : "left"} than the last{hiddenMessageStripeCount() > 1 ? ", top to bottom" : ""} — so you can place words at different heights.
                   </p>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-purple-600 shrink-0" style={{ fontFamily: FONT_BODY }}>Message:</span>
@@ -3573,9 +3587,9 @@ export default function Home() {
                         Right → Left
                       </button>
                     </div>
-                    {hiddenMessageRowCount() > 1 && (
+                    {hiddenMessageStripeCount() > 1 && (
                       <span className="text-xs text-purple-500" style={{ fontFamily: FONT_BODY }}>
-                        {hiddenMessageRowCount()} stripes
+                        {hiddenMessageStripeCount()} stripes
                       </span>
                     )}
                   </div>
