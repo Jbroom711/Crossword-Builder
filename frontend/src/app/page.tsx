@@ -808,10 +808,8 @@ export default function Home() {
   // The reading instruction printed under/above the grid in the PDFs.
   function hiddenMessageNote() {
     const horizontal = hiddenMessageRTL ? "right to left" : "left to right";
-    if (hiddenMessageStripeCount() <= 1) {
-      return `The circled letters spell a hidden message when read ${horizontal}.`;
-    }
-    return `The circled letters spell a hidden message, read in stripes top-to-bottom, each ${horizontal}.`;
+    const inStripes = hiddenMessageStripeCount() > 1 ? " in stripes" : "";
+    return `The circled letters spell a hidden message, read ${horizontal}${inStripes}.`;
   }
 
   // Load saved puzzles from API (if signed in) or localStorage (if not)
