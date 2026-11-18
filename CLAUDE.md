@@ -76,6 +76,14 @@ This file is the practical working summary.
 
 ## Recent changes (most recent first)
 
+- **Hidden message: stripes now break on a leftward "carriage return"** (2026-11-18):
+  the auto-stripe logic was splitting a single message line laid across different
+  heights into one narrow stripe *per row*. Now the circled letters read in
+  **selection (click) order** and a new stripe begins only when a clicked square
+  sits further LEFT than the previous one (further RIGHT in RTL) — so one line can
+  weave across heights and still read as one stripe. `startsNewStripe()` is the one
+  predicate; `hiddenMessageStripeCount()` replaced the old row-count. Preview, PDF
+  note, and both panel hints updated. (Replaces the row-sort described below.)
 - **Hidden message: direction toggle + auto "stripes"** (2026-11-17): the circled
   letters now read in a chosen direction — Left→Right (default) or Right→Left
   (Hebrew-style, e.g. Uncle Sam) — via a toggle in the Hidden Message panel. Multi-
