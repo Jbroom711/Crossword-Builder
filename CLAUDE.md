@@ -76,6 +76,15 @@ This file is the practical working summary.
 
 ## Recent changes (most recent first)
 
+- **Hidden message: click a gap to add/remove a word-space** (2026-11-18): two
+  words on the SAME stripe read joined ("IS"+"THE" → "ISTHE") because there's no
+  leftward wrap between them. The Message preview is now interactive
+  (`renderHiddenMessagePreview()`) — letters are tiles with a clickable gap
+  between each pair; click a gap to insert a space, click the space again to
+  remove it. `hiddenMessageSpaces: number[]` (reading-order boundary indices)
+  threads through the same sites as `hiddenMessageRTL` and persists packed into
+  the `hidden_message_cells` jsonb as `{ cells, rtl, spaces }` (no schema change).
+  Builder-side only — nothing printed changes (the PDF note stays generic).
 - **Hidden message: stripes now break on a leftward "carriage return"** (2026-11-18):
   the auto-stripe logic was splitting a single message line laid across different
   heights into one narrow stripe *per row*. Now the circled letters read in
